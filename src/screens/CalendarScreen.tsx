@@ -1,33 +1,72 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import {
   FlatList,
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
+import { NavigationProp, useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { loadItems, saveItems } from '../storage/storage';
-import { STORAGE_KEYS, ScheduleEvent } from '../types';
+import { Memo, STORAGE_KEYS, ScheduleEvent, Todo } from '../types';
 import { colors } from '../theme/colors';
 import { getMonthMatrix, toDateKey, WEEKDAY_LABELS } from '../utils/date';
+import { memoSummaryText } from '../utils/richText';
+import type { TabParamList } from '../navigation/TabNavigator';
+
+type AgendaEntry =
+  | { kind: 'schedule'; id: string; title: string; sortAt: number }
+  | { kind: 'todo'; id: string; title: string; done: boolean; sortAt: number }
+  | { kind: 'memo'; id: string; title: string; sortAt: number };
+
+function todoDateKey(todo: Todo): string {
+  return toDateKey(new Date(todo.done ? todo.completedAt ?? todo.createdAt : todo.createdAt));
+}
+
+function memoDateKey(memo: Memo): string {
+  return toDateKey(new Date(memo.createdAt));
+}
+
+function groupByKey<T>(items: T[], keyOf: (item: T) => string): Map<string, T[]> {
+  const map = new Map<string, T[]>();
+  items.forEach((item) => {
+    const key = keyOf(item);
+    const list = map.get(key) ?? [];
+    list.push(item);
+    map.set(key, list);
+  });
+  return map;
+}
 
 export default function CalendarScreen() {
+  const insets = useSafeAreaInsets();
+  const navigation = useNavigation<NavigationProp<TabParamList>>();
   const today = new Date();
   const [viewYear, setViewYear] = useState(today.getFullYear());
   const [viewMonth, setViewMonth] = useState(today.getMonth());
   const [selectedKey, setSelectedKey] = useState(toDateKey(today));
   const [events, setEvents] = useState<ScheduleEvent[]>([]);
+  const [todos, setTodos] = useState<Todo[]>([]);
+  const [memos, setMemos] = useState<Memo[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [input, setInput] = useState('');
 
   useFocusEffect(
     useCallback(() => {
       (async () => {
-        const items = await loadItems<ScheduleEvent>(STORAGE_KEYS.SCHEDULES);
-        setEvents(items);
+        const [scheduleItems, todoItems, memoItems] = await Promise.all([
+          loadItems<ScheduleEvent>(STORAGE_KEYS.SCHEDULES),
+          loadItems<Todo>(STORAGE_KEYS.TODOS),
+          loadItems<Memo>(STORAGE_KEYS.MEMOS),
+        ]);
+        setEvents(scheduleItems);
+        setTodos(todoItems);
+        setMemos(memoItems);
         setLoaded(true);
       })();
     }, [])
@@ -47,11 +86,39 @@ export default function CalendarScreen() {
     () => new Set(events.map((e) => e.date)),
     [events]
   );
+  const todoDateKeys = useMemo(() => new Set(todos.map(todoDateKey)), [todos]);
+  const memoDateKeys = useMemo(() => new Set(memos.map(memoDateKey)), [memos]);
+
+  const todosByDate = useMemo(() => groupByKey(todos, todoDateKey), [todos]);
+  const memosByDate = useMemo(() => groupByKey(memos, memoDateKey), [memos]);
 
   const selectedEvents = useMemo(
     () => events.filter((e) => e.date === selectedKey).sort((a, b) => a.createdAt - b.createdAt),
     [events, selectedKey]
   );
+
+  const agenda = useMemo<AgendaEntry[]>(() => {
+    const scheduleEntries: AgendaEntry[] = selectedEvents.map((e) => ({
+      kind: 'schedule',
+      id: e.id,
+      title: e.title,
+      sortAt: e.createdAt,
+    }));
+    const todoEntries: AgendaEntry[] = (todosByDate.get(selectedKey) ?? []).map((t) => ({
+      kind: 'todo',
+      id: t.id,
+      title: t.title,
+      done: t.done,
+      sortAt: t.done ? t.completedAt ?? t.createdAt : t.createdAt,
+    }));
+    const memoEntries: AgendaEntry[] = (memosByDate.get(selectedKey) ?? []).map((m) => ({
+      kind: 'memo',
+      id: m.id,
+      title: memoSummaryText(m),
+      sortAt: m.createdAt,
+    }));
+    return [...scheduleEntries, ...todoEntries, ...memoEntries].sort((a, b) => a.sortAt - b.sortAt);
+  }, [selectedEvents, todosByDate, memosByDate, selectedKey]);
 
   const goToMonth = (delta: number) => {
     const next = new Date(viewYear, viewMonth + delta, 1);
@@ -82,8 +149,11 @@ export default function CalendarScreen() {
   const [selYear, selMonth, selDay] = selectedKey.split('-').map(Number);
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
+      <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
         <Text style={styles.title}>캘린더</Text>
       </View>
 
@@ -121,7 +191,9 @@ export default function CalendarScreen() {
             const key = toDateKey(date);
             const isSelected = key === selectedKey;
             const isToday = key === todayKey;
-            const hasEvent = eventDateKeys.has(key);
+            const hasSchedule = eventDateKeys.has(key);
+            const hasTodo = todoDateKeys.has(key);
+            const hasMemo = memoDateKeys.has(key);
             return (
               <Pressable
                 key={di}
@@ -146,7 +218,11 @@ export default function CalendarScreen() {
                     {date.getDate()}
                   </Text>
                 </View>
-                {hasEvent && <View style={styles.eventDot} />}
+                <View style={styles.dotRow}>
+                  {hasSchedule && <View style={[styles.dot, styles.dotSchedule]} />}
+                  {hasTodo && <View style={[styles.dot, styles.dotTodo]} />}
+                  {hasMemo && <View style={[styles.dot, styles.dotMemo]} />}
+                </View>
               </Pressable>
             );
           })}
@@ -156,26 +232,63 @@ export default function CalendarScreen() {
       <View style={styles.divider} />
 
       <Text style={styles.selectedDateLabel}>
-        {selMonth}월 {selDay}일 일정
+        {selMonth}월 {selDay}일
       </Text>
 
       <FlatList
         style={styles.eventList}
-        data={selectedEvents}
-        keyExtractor={(item) => item.id}
+        data={agenda}
+        keyExtractor={(item) => `${item.kind}-${item.id}`}
         contentContainerStyle={styles.eventListContent}
         ListEmptyComponent={
-          <Text style={styles.emptyText}>등록된 일정이 없어요</Text>
+          <Text style={styles.emptyText}>표시할 항목이 없어요</Text>
         }
-        renderItem={({ item }) => (
-          <View style={styles.eventRow}>
-            <View style={styles.eventDotInline} />
-            <Text style={styles.eventText}>{item.title}</Text>
-            <Pressable onPress={() => deleteEvent(item.id)} hitSlop={8}>
-              <Ionicons name="trash-outline" size={18} color={colors.subtext} />
+        renderItem={({ item }) => {
+          if (item.kind === 'schedule') {
+            return (
+              <View style={styles.eventRow}>
+                <View style={styles.eventDotInline} />
+                <Text style={styles.eventText}>{item.title}</Text>
+                <Pressable onPress={() => deleteEvent(item.id)} hitSlop={8}>
+                  <Ionicons name="trash-outline" size={18} color={colors.subtext} />
+                </Pressable>
+              </View>
+            );
+          }
+          if (item.kind === 'todo') {
+            return (
+              <Pressable
+                style={styles.eventRow}
+                onPress={() => navigation.navigate('오늘', { focusTodoId: item.id })}
+              >
+                <Ionicons
+                  name={item.done ? 'checkmark-circle' : 'ellipse-outline'}
+                  size={16}
+                  color={item.done ? colors.done : colors.subtext}
+                />
+                <Text
+                  style={[styles.eventText, item.done && styles.eventTextDone]}
+                  numberOfLines={1}
+                >
+                  {item.title}
+                </Text>
+                <Ionicons name="chevron-forward" size={16} color={colors.subtext} />
+              </Pressable>
+            );
+          }
+          return (
+            <Pressable
+              style={styles.eventRow}
+              onPress={() => navigation.navigate('지식창고', { focusMemoId: item.id })}
+            >
+              <Ionicons name="library-outline" size={16} color={colors.star} />
+              <Text style={styles.eventText} numberOfLines={1}>
+                {item.title}
+              </Text>
+              <Ionicons name="chevron-forward" size={16} color={colors.subtext} />
             </Pressable>
-          </View>
-        )}
+          );
+        }}
       />
 
       <View style={styles.inputRow}>
@@ -192,7 +305,7 @@ export default function CalendarScreen() {
           <Ionicons name="add" size={22} color="#FFFFFF" />
         </Pressable>
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -273,12 +386,25 @@ const styles = StyleSheet.create({
   saturday: {
     color: colors.primary,
   },
-  eventDot: {
+  dotRow: {
+    flexDirection: 'row',
+    gap: 3,
+    marginTop: 2,
+    height: 4,
+  },
+  dot: {
     width: 4,
     height: 4,
     borderRadius: 2,
+  },
+  dotSchedule: {
     backgroundColor: colors.primary,
-    marginTop: 2,
+  },
+  dotTodo: {
+    backgroundColor: colors.done,
+  },
+  dotMemo: {
+    backgroundColor: colors.star,
   },
   divider: {
     height: 1,
@@ -326,6 +452,10 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 14,
     color: colors.text,
+  },
+  eventTextDone: {
+    color: colors.subtext,
+    textDecorationLine: 'line-through',
   },
   inputRow: {
     flexDirection: 'row',

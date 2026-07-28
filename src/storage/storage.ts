@@ -12,11 +12,26 @@ async function getUserId(): Promise<string | null> {
 }
 
 function rowToTodo(row: any): Todo {
-  return { id: row.id, title: row.title, done: row.done, createdAt: row.created_at };
+  return {
+    id: row.id,
+    title: row.title,
+    done: row.done,
+    createdAt: row.created_at,
+    completedAt: row.completed_at ?? undefined,
+    tags: row.tags ?? undefined,
+  };
 }
 
 function todoToRow(item: Todo, userId: string) {
-  return { id: item.id, user_id: userId, title: item.title, done: item.done, created_at: item.createdAt };
+  return {
+    id: item.id,
+    user_id: userId,
+    title: item.title,
+    done: item.done,
+    created_at: item.createdAt,
+    completed_at: item.completedAt ?? null,
+    tags: item.tags ?? [],
+  };
 }
 
 function rowToMemo(row: any): Memo {
@@ -28,7 +43,11 @@ function rowToMemo(row: any): Memo {
     reviewStage: row.review_stage,
     nextReviewAt: row.next_review_at,
     lastReviewedAt: row.last_reviewed_at ?? undefined,
-    isPriority: row.is_priority ?? undefined,
+    isPinned: row.is_pinned ?? undefined,
+    tags: row.tags ?? undefined,
+    color: row.color ?? undefined,
+    noteType: row.note_type ?? 'text',
+    checklistItems: row.checklist_items ?? undefined,
   };
 }
 
@@ -42,7 +61,11 @@ function memoToRow(item: Memo, userId: string) {
     review_stage: item.reviewStage,
     next_review_at: item.nextReviewAt,
     last_reviewed_at: item.lastReviewedAt ?? null,
-    is_priority: item.isPriority ?? false,
+    is_pinned: item.isPinned ?? false,
+    tags: item.tags ?? [],
+    color: item.color ?? null,
+    note_type: item.noteType ?? 'text',
+    checklist_items: item.checklistItems ?? [],
   };
 }
 

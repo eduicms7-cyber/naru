@@ -23,3 +23,8 @@ export function getMonthMatrix(year: number, month: number): (Date | null)[][] {
 }
 
 export const WEEKDAY_LABELS = ['일', '월', '화', '수', '목', '금', '토'];
+
+export function formatShortDate(timestamp: number): string {
+  const d = new Date(timestamp);
+  return `${d.getMonth() + 1}월 ${d.getDate()}일`;
+}

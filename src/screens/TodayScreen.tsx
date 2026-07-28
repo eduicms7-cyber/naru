@@ -1,20 +1,27 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   FlatList,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
+import { NavigationProp, RouteProp, useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { loadItems, saveItems } from '../storage/storage';
 import { STORAGE_KEYS, Todo } from '../types';
 import { colors } from '../theme/colors';
 import { useAuth } from '../auth/AuthContext';
+import { parseTags } from '../utils/tags';
+import { formatShortDate } from '../utils/date';
+import { getPendingTodoCompletions } from '../native/ReviewWidget';
+import type { TabParamList } from '../navigation/TabNavigator';
 
 function formatTodayLabel(): string {
   const days = ['일', '월', '화', '수', '목', '금', '토'];
@@ -24,45 +31,110 @@ function formatTodayLabel(): string {
 
 export default function TodayScreen() {
   const { signOut } = useAuth();
+  const insets = useSafeAreaInsets();
+  const navigation = useNavigation<NavigationProp<TabParamList>>();
+  const route = useRoute<RouteProp<TabParamList, '오늘'>>();
   const [todos, setTodos] = useState<Todo[]>([]);
   const [input, setInput] = useState('');
+  const [tagsInput, setTagsInput] = useState('');
   const [loaded, setLoaded] = useState(false);
-
-  useFocusEffect(
-    useCallback(() => {
-      (async () => {
-        const items = await loadItems<Todo>(STORAGE_KEYS.TODOS);
-        setTodos(items);
-        setLoaded(true);
-      })();
-    }, [])
-  );
+  const [selectedTag, setSelectedTag] = useState<string | null>(null);
+  const [formOpen, setFormOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const persist = useCallback((items: Todo[]) => {
     setTodos(items);
     saveItems(STORAGE_KEYS.TODOS, items);
   }, []);
 
-  const addTodo = () => {
-    const title = input.trim();
-    if (!title) return;
-    const newTodo: Todo = {
-      id: Date.now().toString(),
-      title,
-      done: false,
-      createdAt: Date.now(),
-    };
-    persist([newTodo, ...todos]);
+  useFocusEffect(
+    useCallback(() => {
+      (async () => {
+        const items = await loadItems<Todo>(STORAGE_KEYS.TODOS);
+        // 잠금화면 "기억의 궁전"에서 완료 체크된 할일이 있으면 여기서 따라잡는다.
+        const pendingIds = await getPendingTodoCompletions();
+        if (pendingIds.length > 0) {
+          const completedAt = Date.now();
+          const updated = items.map((t) =>
+            pendingIds.includes(t.id) ? { ...t, done: true, completedAt } : t
+          );
+          persist(updated);
+        } else {
+          setTodos(items);
+        }
+        setLoaded(true);
+      })();
+    }, [persist])
+  );
+
+  const openAddForm = () => {
+    setEditingId(null);
     setInput('');
+    setTagsInput('');
+    setFormOpen(true);
   };
 
+  const openEditForm = (todo: Todo) => {
+    setEditingId(todo.id);
+    setInput(todo.title);
+    setTagsInput((todo.tags ?? []).join(', '));
+    setFormOpen(true);
+  };
+
+  const saveTodo = () => {
+    const title = input.trim();
+    if (!title) return;
+    const tags = parseTags(tagsInput);
+    if (editingId) {
+      persist(todos.map((t) => (t.id === editingId ? { ...t, title, tags } : t)));
+    } else {
+      const newTodo: Todo = {
+        id: Date.now().toString(),
+        title,
+        done: false,
+        createdAt: Date.now(),
+        tags,
+      };
+      persist([newTodo, ...todos]);
+    }
+    setFormOpen(false);
+  };
+
+  // 캘린더에서 특정 할일을 탭해 들어온 경우, 그 항목의 수정화면을 바로 연다.
+  useEffect(() => {
+    const focusId = route.params?.focusTodoId;
+    if (!focusId) return;
+    const todo = todos.find((t) => t.id === focusId);
+    if (todo) {
+      openEditForm(todo);
+      navigation.setParams({ focusTodoId: undefined });
+    }
+  }, [route.params?.focusTodoId, todos]);
+
   const toggleTodo = (id: string) => {
-    persist(todos.map((t) => (t.id === id ? { ...t, done: !t.done } : t)));
+    persist(
+      todos.map((t) =>
+        t.id === id
+          ? { ...t, done: !t.done, completedAt: !t.done ? Date.now() : undefined }
+          : t
+      )
+    );
   };
 
   const deleteTodo = (id: string) => {
     persist(todos.filter((t) => t.id !== id));
   };
+
+  const allTags = useMemo(() => {
+    const set = new Set<string>();
+    todos.forEach((t) => t.tags?.forEach((tag) => set.add(tag)));
+    return Array.from(set);
+  }, [todos]);
+
+  const visibleTodos = useMemo(
+    () => (selectedTag ? todos.filter((t) => t.tags?.includes(selectedTag)) : todos),
+    [todos, selectedTag]
+  );
 
   if (!loaded) return <View style={styles.container} />;
 
@@ -73,7 +145,7 @@ export default function TodayScreen() {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
         <View style={styles.headerTopRow}>
           <Text style={styles.dateLabel}>{formatTodayLabel()}</Text>
           <Pressable onPress={signOut} hitSlop={8}>
@@ -88,8 +160,42 @@ export default function TodayScreen() {
         )}
       </View>
 
+      {allTags.length > 0 && (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.tagFilterRow}
+          contentContainerStyle={styles.tagFilterContent}
+        >
+          <Pressable
+            style={[styles.tagFilterChip, !selectedTag && styles.tagFilterChipActive]}
+            onPress={() => setSelectedTag(null)}
+          >
+            <Text style={[styles.tagFilterChipText, !selectedTag && styles.tagFilterChipTextActive]}>
+              전체
+            </Text>
+          </Pressable>
+          {allTags.map((tag) => (
+            <Pressable
+              key={tag}
+              style={[styles.tagFilterChip, selectedTag === tag && styles.tagFilterChipActive]}
+              onPress={() => setSelectedTag(selectedTag === tag ? null : tag)}
+            >
+              <Text
+                style={[
+                  styles.tagFilterChipText,
+                  selectedTag === tag && styles.tagFilterChipTextActive,
+                ]}
+              >
+                {tag}
+              </Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+      )}
+
       <FlatList
-        data={todos}
+        data={visibleTodos}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}
         ListEmptyComponent={
@@ -110,35 +216,82 @@ export default function TodayScreen() {
                 color={item.done ? colors.done : colors.subtext}
               />
             </Pressable>
-            <Text
-              style={[
-                styles.todoText,
-                item.done && styles.todoTextDone,
-              ]}
-            >
-              {item.title}
-            </Text>
-            <Pressable onPress={() => deleteTodo(item.id)} hitSlop={8}>
-              <Ionicons name="trash-outline" size={20} color={colors.subtext} />
-            </Pressable>
+            <View style={styles.todoBody}>
+              <Text
+                style={[
+                  styles.todoText,
+                  item.done && styles.todoTextDone,
+                ]}
+              >
+                {item.title}
+              </Text>
+              <Text style={styles.todoMeta}>
+                작성 {formatShortDate(item.createdAt)}
+                {item.done && item.completedAt ? ` · 완료 ${formatShortDate(item.completedAt)}` : ''}
+              </Text>
+              {item.tags && item.tags.length > 0 && (
+                <View style={styles.todoTagRow}>
+                  {item.tags.map((tag) => (
+                    <View key={tag} style={styles.todoTagChip}>
+                      <Text style={styles.todoTagChipText}>{tag}</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </View>
+            <View style={styles.todoActions}>
+              <Pressable onPress={() => openEditForm(item)} hitSlop={8}>
+                <Ionicons name="pencil-outline" size={20} color={colors.subtext} />
+              </Pressable>
+              <Pressable onPress={() => deleteTodo(item.id)} hitSlop={8}>
+                <Ionicons name="trash-outline" size={20} color={colors.subtext} />
+              </Pressable>
+            </View>
           </View>
         )}
       />
 
-      <View style={styles.inputRow}>
-        <TextInput
-          style={styles.input}
-          placeholder="할 일을 입력하세요"
-          placeholderTextColor={colors.subtext}
-          value={input}
-          onChangeText={setInput}
-          onSubmitEditing={addTodo}
-          returnKeyType="done"
-        />
-        <Pressable style={styles.addButton} onPress={addTodo}>
-          <Ionicons name="add" size={24} color="#FFFFFF" />
-        </Pressable>
-      </View>
+      <Pressable style={styles.fab} onPress={openAddForm}>
+        <Ionicons name="add" size={28} color="#FFFFFF" />
+      </Pressable>
+
+      <Modal visible={formOpen} animationType="slide" transparent onRequestClose={() => setFormOpen(false)}>
+        <KeyboardAvoidingView
+          style={styles.formOverlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <View style={styles.formCard}>
+            <View style={styles.formHeader}>
+              <Pressable onPress={() => setFormOpen(false)}>
+                <Text style={styles.formCancel}>취소</Text>
+              </Pressable>
+              <Text style={styles.formTitle}>{editingId ? '할 일 수정' : '새 할 일'}</Text>
+              <Pressable onPress={saveTodo}>
+                <Text style={styles.formSave}>저장</Text>
+              </Pressable>
+            </View>
+            <TextInput
+              style={styles.input}
+              placeholder="할 일을 입력하세요"
+              placeholderTextColor={colors.subtext}
+              value={input}
+              onChangeText={setInput}
+              onSubmitEditing={saveTodo}
+              returnKeyType="done"
+              autoFocus
+            />
+            <TextInput
+              style={styles.tagInput}
+              placeholder="태그 (쉼표로 구분, 선택)"
+              placeholderTextColor={colors.subtext}
+              value={tagsInput}
+              onChangeText={setTagsInput}
+              onSubmitEditing={saveTodo}
+              returnKeyType="done"
+            />
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -180,7 +333,7 @@ const styles = StyleSheet.create({
   listContent: {
     paddingHorizontal: 20,
     paddingTop: 8,
-    paddingBottom: 16,
+    paddingBottom: 100,
     flexGrow: 1,
   },
   empty: {
@@ -193,9 +346,38 @@ const styles = StyleSheet.create({
     color: colors.subtext,
     fontSize: 15,
   },
+  tagFilterRow: {
+    maxHeight: 40,
+    marginBottom: 8,
+  },
+  tagFilterContent: {
+    paddingHorizontal: 20,
+    gap: 8,
+  },
+  tagFilterChip: {
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 14,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    marginRight: 8,
+  },
+  tagFilterChipActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  tagFilterChipText: {
+    fontSize: 13,
+    color: colors.subtext,
+  },
+  tagFilterChipTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
   todoRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     backgroundColor: colors.card,
     borderRadius: 12,
     paddingVertical: 14,
@@ -203,9 +385,13 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     gap: 12,
   },
-  checkbox: {},
-  todoText: {
+  checkbox: {
+    paddingTop: 2,
+  },
+  todoBody: {
     flex: 1,
+  },
+  todoText: {
     fontSize: 16,
     color: colors.text,
   },
@@ -213,18 +399,83 @@ const styles = StyleSheet.create({
     color: colors.subtext,
     textDecorationLine: 'line-through',
   },
-  inputRow: {
+  todoMeta: {
+    fontSize: 12,
+    color: colors.subtext,
+    marginTop: 4,
+  },
+  todoTagRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 6,
+  },
+  todoTagChip: {
+    backgroundColor: 'rgba(0,0,0,0.06)',
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  todoTagChipText: {
+    fontSize: 11,
+    color: colors.subtext,
+  },
+  todoActions: {
+    flexDirection: 'row',
+    gap: 14,
+    paddingTop: 2,
+  },
+  fab: {
+    position: 'absolute',
+    right: 20,
+    bottom: 24,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  formOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.4)',
+  },
+  formCard: {
+    backgroundColor: colors.card,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    paddingHorizontal: 20,
+    paddingTop: 14,
+    paddingBottom: 28,
+    gap: 10,
+  },
+  formHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    gap: 10,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    backgroundColor: colors.card,
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  formCancel: {
+    fontSize: 15,
+    color: colors.subtext,
+  },
+  formTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  formSave: {
+    fontSize: 15,
+    color: colors.primary,
+    fontWeight: '600',
   },
   input: {
-    flex: 1,
     backgroundColor: colors.background,
     borderRadius: 10,
     paddingHorizontal: 14,
@@ -232,12 +483,12 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: colors.text,
   },
-  addButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
+  tagInput: {
+    backgroundColor: colors.background,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    fontSize: 13,
+    color: colors.text,
   },
 });

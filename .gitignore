@@ -50,6 +50,11 @@ yarn-error.*
 # typescript
 *.tsbuildinfo
 
-# generated native folders
+# generated native folders — /android has hand-written native code (기억의 궁전 잠금화면 등)
+# and is tracked; only /ios stays ignored since it doesn't exist yet (no custom iOS code).
 /ios
-/android
+/android/build/
+/android/app/build/
+/android/app/.cxx/
+/android/.gradle/
+/android/local.properties

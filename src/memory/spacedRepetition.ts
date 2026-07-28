@@ -17,15 +17,6 @@ export function isDueForReview(memo: Memo, now: number): boolean {
 }
 
 export function markRemembered(memo: Memo, now: number): Memo {
-  // Priority memos stay on the shortest interval instead of advancing through the curve.
-  if (memo.isPriority) {
-    return {
-      ...memo,
-      reviewStage: 0,
-      nextReviewAt: now + REVIEW_INTERVALS_DAYS[0] * DAY_MS,
-      lastReviewedAt: now,
-    };
-  }
   const nextStage = Math.min(memo.reviewStage + 1, REVIEW_INTERVALS_DAYS.length - 1);
   return {
     ...memo,

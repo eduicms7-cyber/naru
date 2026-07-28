@@ -6,7 +6,9 @@ create table if not exists todos (
   user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
   title text not null,
   done boolean not null default false,
-  created_at bigint not null
+  created_at bigint not null,
+  completed_at bigint,
+  tags text[] not null default '{}'
 );
 
 create table if not exists memos (
@@ -18,8 +20,22 @@ create table if not exists memos (
   review_stage int not null default 0,
   next_review_at bigint not null,
   last_reviewed_at bigint,
-  is_priority boolean not null default false
+  is_pinned boolean not null default false,
+  tags text[] not null default '{}',
+  color text,
+  note_type text not null default 'text',
+  checklist_items jsonb not null default '[]'
 );
+
+-- 기존에 이미 schema.sql을 실행해 memos 테이블이 있는 프로젝트는 아래 마이그레이션을
+-- Supabase SQL Editor에서 한 번 더 실행해야 한다 (지식창고 기능: 고정/태그/색상/체크리스트).
+-- alter table memos rename column is_priority to is_pinned;
+-- alter table memos add column if not exists tags text[] not null default '{}';
+-- alter table memos add column if not exists color text;
+-- alter table memos add column if not exists note_type text not null default 'text';
+-- alter table memos add column if not exists checklist_items jsonb not null default '[]';
+-- alter table todos add column if not exists completed_at bigint;
+-- alter table todos add column if not exists tags text[] not null default '{}';
 
 create table if not exists schedules (
   id text primary key,

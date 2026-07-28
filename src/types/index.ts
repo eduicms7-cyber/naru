@@ -3,6 +3,14 @@ export interface Todo {
   title: string;
   done: boolean;
   createdAt: number;
+  completedAt?: number;
+  tags?: string[];
+}
+
+export interface ChecklistItem {
+  id: string;
+  text: string;
+  done: boolean;
 }
 
 export interface Memo {
@@ -13,7 +21,11 @@ export interface Memo {
   reviewStage: number;
   nextReviewAt: number;
   lastReviewedAt?: number;
-  isPriority?: boolean;
+  isPinned?: boolean;
+  tags?: string[];
+  color?: string;
+  noteType?: 'text' | 'checklist';
+  checklistItems?: ChecklistItem[];
 }
 
 export interface ScheduleEvent {
