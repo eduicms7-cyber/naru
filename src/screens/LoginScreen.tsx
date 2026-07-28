@@ -1,0 +1,178 @@
+import React, { useState } from 'react';
+import {
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
+import { useAuth } from '../auth/AuthContext';
+import { colors } from '../theme/colors';
+import { showAlert } from '../utils/alert';
+
+export default function LoginScreen() {
+  const { signIn, signUp, resetPasswordForEmail } = useAuth();
+  const [mode, setMode] = useState<'signIn' | 'signUp' | 'forgotPassword'>('signIn');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  const submit = async () => {
+    if (!email.trim()) {
+      showAlert('입력 필요', '이메일을 입력해주세요.');
+      return;
+    }
+    if (mode === 'forgotPassword') {
+      setSubmitting(true);
+      const errorMessage = await resetPasswordForEmail(email.trim());
+      setSubmitting(false);
+
+      if (errorMessage) {
+        showAlert('재설정 링크 전송 실패', errorMessage);
+      } else {
+        showAlert('메일 전송 완료', '비밀번호 재설정 링크를 이메일로 보냈습니다.');
+        setMode('signIn');
+      }
+      return;
+    }
+
+    if (!password) {
+      showAlert('입력 필요', '이메일과 비밀번호를 입력해주세요.');
+      return;
+    }
+    setSubmitting(true);
+    const errorMessage =
+      mode === 'signIn'
+        ? await signIn(email.trim(), password)
+        : await signUp(email.trim(), password);
+    setSubmitting(false);
+
+    if (errorMessage) {
+      showAlert(mode === 'signIn' ? '로그인 실패' : '회원가입 실패', errorMessage);
+    } else if (mode === 'signUp') {
+      showAlert('회원가입 완료', '확인 이메일을 확인한 뒤 로그인해주세요.');
+      setMode('signIn');
+    }
+  };
+
+  const subtitle =
+    mode === 'signIn'
+      ? '로그인하고 메모를 동기화하세요'
+      : mode === 'signUp'
+      ? '계정을 만들고 시작하세요'
+      : '가입한 이메일로 재설정 링크를 보내드려요';
+
+  return (
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
+      <Text style={styles.title}>Naru</Text>
+      <Text style={styles.subtitle}>{subtitle}</Text>
+
+      <TextInput
+        style={styles.input}
+        placeholder="이메일"
+        placeholderTextColor={colors.subtext}
+        value={email}
+        onChangeText={setEmail}
+        autoCapitalize="none"
+        autoCorrect={false}
+        keyboardType="email-address"
+      />
+      {mode !== 'forgotPassword' && (
+        <TextInput
+          style={styles.input}
+          placeholder="비밀번호"
+          placeholderTextColor={colors.subtext}
+          value={password}
+          onChangeText={setPassword}
+          secureTextEntry
+        />
+      )}
+
+      <Pressable style={styles.submitButton} onPress={submit} disabled={submitting}>
+        {submitting ? (
+          <ActivityIndicator color="#FFFFFF" />
+        ) : (
+          <Text style={styles.submitButtonText}>
+            {mode === 'signIn' ? '로그인' : mode === 'signUp' ? '회원가입' : '재설정 링크 보내기'}
+          </Text>
+        )}
+      </Pressable>
+
+      {mode === 'signIn' && Platform.OS === 'web' && (
+        <Pressable onPress={() => setMode('forgotPassword')} hitSlop={8}>
+          <Text style={styles.switchModeText}>비밀번호를 잊으셨나요?</Text>
+        </Pressable>
+      )}
+
+      <Pressable
+        onPress={() => setMode(mode === 'signIn' ? 'signUp' : 'signIn')}
+        hitSlop={8}
+      >
+        <Text style={styles.switchModeText}>
+          {mode === 'signUp'
+            ? '이미 계정이 있으신가요? 로그인'
+            : mode === 'forgotPassword'
+            ? '로그인으로 돌아가기'
+            : '계정이 없으신가요? 회원가입'}
+        </Text>
+      </Pressable>
+    </KeyboardAvoidingView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.background,
+    justifyContent: 'center',
+    paddingHorizontal: 28,
+  },
+  title: {
+    fontSize: 32,
+    fontWeight: '700',
+    color: colors.text,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  subtitle: {
+    fontSize: 14,
+    color: colors.subtext,
+    textAlign: 'center',
+    marginBottom: 28,
+  },
+  input: {
+    backgroundColor: colors.card,
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 15,
+    color: colors.text,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  submitButton: {
+    backgroundColor: colors.primary,
+    borderRadius: 10,
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  submitButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  switchModeText: {
+    color: colors.primary,
+    fontSize: 13,
+    textAlign: 'center',
+    marginTop: 18,
+  },
+});
