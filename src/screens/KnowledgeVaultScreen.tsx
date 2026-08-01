@@ -613,7 +613,7 @@ export default function KnowledgeVaultScreen() {
             )}
           </ScrollView>
 
-          <View style={styles.composerToolbar}>
+          <View style={[styles.composerToolbar, { paddingBottom: insets.bottom + 12 }]}>
             <Pressable style={styles.toolbarButton} onPress={pickImage}>
               <Ionicons name="image-outline" size={22} color={colors.primary} />
               <Text style={styles.toolbarButtonText}>이미지 첨부</Text>

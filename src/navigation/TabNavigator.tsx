@@ -36,7 +36,7 @@ export default function TabNavigator() {
         ),
       })}
     >
-      <Tab.Screen name="오늘" component={TodayScreen} />
+      <Tab.Screen name="오늘" component={TodayScreen} options={{ tabBarLabel: '할 일' }} />
       <Tab.Screen name="지식창고" component={KnowledgeVaultScreen} />
       <Tab.Screen name="캘린더" component={CalendarScreen} />
     </Tab.Navigator>
