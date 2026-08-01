@@ -53,7 +53,7 @@ src/
   lib/
     supabase.ts                 # Supabase 클라이언트 생성
   storage/
-    storage.ts                  # Supabase 공용 헬퍼 (loadItems / saveItems, 테이블별 snake_case 매핑)
+    storage.ts                  # Supabase 공용 헬퍼 (loadItems / createItem / updateItem / deleteItem, 테이블별 snake_case 매핑, 개별 실패 op 재시도 큐)
     migrateLegacyData.ts        # 옛 AsyncStorage 데이터를 최초 로그인 시 1회 업로드
   types/
     index.ts                   # Todo, Memo, ChecklistItem, ScheduleEvent 타입 + STORAGE_KEYS(테이블명)
@@ -83,7 +83,7 @@ supabase/
 
 탭 간 "링크"는 `TabParamList`(`src/navigation/TabNavigator.tsx`)의 `focusTodoId`/`focusMemoId` 파라미터로 구현합니다 — `CalendarScreen`이 `navigation.navigate('오늘'|'지식창고', { focusTodoId | focusMemoId })`로 이동시키면, 해당 화면이 목록 로드 후 그 id를 찾아 수정화면을 자동으로 열고 `navigation.setParams`로 파라미터를 비웁니다.
 
-각 화면은 탭에 포커스될 때마다(`useFocusEffect`) `loadItems`로 Supabase에서 다시 불러오고, 변경 시 state와 Supabase를 함께 갱신하는 `persist` 패턴을 사용합니다 — 다른 기기에서 바뀐 내용은 탭을 다시 열면 반영됩니다(실시간 푸시는 아직 없음). 새 도메인을 추가할 때는 이 패턴(타입 정의 → `STORAGE_KEYS`에 테이블명 추가 → `supabase/schema.sql`에 테이블+RLS 추가 → 화면에서 `loadItems`/`saveItems` 사용)을 따르세요. 모든 테이블은 RLS로 `auth.uid() = user_id` 본인 데이터만 접근 가능합니다.
+각 화면은 탭에 포커스될 때마다(`useFocusEffect`) `loadItems`로 Supabase에서 전체 목록을 다시 불러오고, 변경(추가/수정/삭제)이 생기면 로컬 state를 먼저 낙관적으로 갱신한 뒤 `createItem`/`updateItem`/`deleteItem`으로 그 항목 하나만 서버에 반영합니다 — 다른 기기에서 바뀐 내용은 탭을 다시 열면 반영됩니다(실시간 푸시는 아직 없음). **주의: 화면 전체 배열을 통째로 서버에 밀어넣고 거기 없는 id를 삭제하는 "diff 기반 저장"은 절대 쓰지 않습니다** — 기기별로 로컬 캐시가 서로 어긋난 상태에서 그런 방식을 쓰면 다른 기기가 방금 추가한 데이터를 통째로 삭제해버리는 사고가 날 수 있습니다(실제로 발생했던 데이터 유실 버그). 네트워크 실패 시에는 실패한 작업(op) 하나만 AsyncStorage 큐(`naru_pending_ops_*`)에 쌓아 두었다가 다음 `loadItems` 때 개별 재생(`flushPendingOps`)합니다. 새 도메인을 추가할 때는 이 패턴(타입 정의 → `STORAGE_KEYS`에 테이블명 추가 → `supabase/schema.sql`에 테이블+RLS 추가 → 화면에서 `loadItems`/`createItem`/`updateItem`/`deleteItem` 사용)을 따르세요. 모든 테이블은 RLS로 `auth.uid() = user_id` 본인 데이터만 접근 가능합니다.
 
 ## 코드 컨벤션
 

@@ -1,7 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
+  FlatList,
   Image,
   Modal,
+  NativeSyntheticEvent,
+  NativeScrollEvent,
   PanResponder,
   Platform,
   Pressable,
@@ -15,7 +18,8 @@ import { useImageSize } from '../utils/useImageSize';
 
 interface Props {
   visible: boolean;
-  uri?: string;
+  uris: string[];
+  initialIndex?: number;
   onClose: () => void;
 }
 
@@ -27,20 +31,21 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
-// 새 제스처 라이브러리 없이 두 손가락 사이 거리 변화로 핀치줌을 직접 계산한다(모바일).
-// PC에서는 마우스로 두 손가락 제스처를 만들 수 없으니 +/- 버튼으로 같은 scale 값을 조절한다.
-export default function ImageViewerModal({ visible, uri, onClose }: Props) {
-  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+// 이미지 한 장을 보여주는 페이지. 새 제스처 라이브러리 없이 두 손가락 사이 거리 변화로
+// 핀치줌을 직접 계산한다(모바일). PC에서는 마우스로 두 손가락 제스처를 만들 수 없으니
+// +/- 버튼으로 같은 scale 값을 조절한다.
+function ZoomableImagePage({
+  uri,
+  pageWidth,
+  screenHeight,
+}: {
+  uri: string;
+  pageWidth: number;
+  screenHeight: number;
+}) {
   const size = useImageSize(uri);
   const [scale, setScale] = useState(1);
   const lastDistance = useRef<number | null>(null);
-
-  useEffect(() => {
-    if (visible) {
-      setScale(1);
-      lastDistance.current = null;
-    }
-  }, [visible, uri]);
 
   const panResponder = useRef(
     PanResponder.create({
@@ -66,11 +71,64 @@ export default function ImageViewerModal({ visible, uri, onClose }: Props) {
     })
   ).current;
 
-  if (!uri) return null;
-
   const aspectRatio = size ? size.width / size.height : 3 / 4;
-  const boxWidth = screenWidth;
+  const boxWidth = pageWidth;
   const boxHeight = Math.min(screenHeight * 0.8, boxWidth / aspectRatio);
+
+  return (
+    <View style={[styles.page, { width: pageWidth, height: screenHeight }]}>
+      <View style={styles.imageArea} {...panResponder.panHandlers}>
+        <Image
+          source={{ uri }}
+          style={{ width: boxWidth, height: boxHeight, transform: [{ scale }] }}
+          resizeMode="contain"
+        />
+      </View>
+
+      {Platform.OS === 'web' && (
+        <View style={styles.zoomControls}>
+          <Pressable
+            style={styles.zoomButton}
+            onPress={() => setScale((s) => clamp(s - SCALE_STEP, MIN_SCALE, MAX_SCALE))}
+          >
+            <Text style={styles.zoomButtonText}>−</Text>
+          </Pressable>
+          <Text style={styles.zoomLabel}>{Math.round(scale * 100)}%</Text>
+          <Pressable
+            style={styles.zoomButton}
+            onPress={() => setScale((s) => clamp(s + SCALE_STEP, MIN_SCALE, MAX_SCALE))}
+          >
+            <Text style={styles.zoomButtonText}>+</Text>
+          </Pressable>
+        </View>
+      )}
+    </View>
+  );
+}
+
+// 전체화면 이미지 뷰어. 이미지가 여러 장이면 가로 스와이프로 다음/이전 장을 넘겨볼 수 있고,
+// 각 장은 독립적으로 핀치줌 상태를 갖는다.
+export default function ImageViewerModal({ visible, uris, initialIndex = 0, onClose }: Props) {
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+  // 모달을 다시 열 때마다 리스트를 새로 마운트해서 확대 상태/스크롤 위치를 초기화한다.
+  const [mountKey, setMountKey] = useState(0);
+  const safeInitialIndex = clamp(initialIndex, 0, Math.max(uris.length - 1, 0));
+  const [currentIndex, setCurrentIndex] = useState(safeInitialIndex);
+
+  useEffect(() => {
+    if (visible) {
+      setMountKey((k) => k + 1);
+      setCurrentIndex(safeInitialIndex);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible]);
+
+  if (!visible || uris.length === 0) return null;
+
+  const handleMomentumScrollEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const index = Math.round(e.nativeEvent.contentOffset.x / screenWidth);
+    setCurrentIndex(clamp(index, 0, uris.length - 1));
+  };
 
   return (
     <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
@@ -79,31 +137,27 @@ export default function ImageViewerModal({ visible, uri, onClose }: Props) {
           <Ionicons name="close" size={28} color="#FFFFFF" />
         </Pressable>
 
-        <View style={styles.imageArea} {...panResponder.panHandlers}>
-          <Image
-            source={{ uri }}
-            style={{ width: boxWidth, height: boxHeight, transform: [{ scale }] }}
-            resizeMode="contain"
-          />
-        </View>
-
-        {Platform.OS === 'web' && (
-          <View style={styles.zoomControls}>
-            <Pressable
-              style={styles.zoomButton}
-              onPress={() => setScale((s) => clamp(s - SCALE_STEP, MIN_SCALE, MAX_SCALE))}
-            >
-              <Text style={styles.zoomButtonText}>−</Text>
-            </Pressable>
-            <Text style={styles.zoomLabel}>{Math.round(scale * 100)}%</Text>
-            <Pressable
-              style={styles.zoomButton}
-              onPress={() => setScale((s) => clamp(s + SCALE_STEP, MIN_SCALE, MAX_SCALE))}
-            >
-              <Text style={styles.zoomButtonText}>+</Text>
-            </Pressable>
-          </View>
+        {uris.length > 1 && (
+          <Text style={styles.counter}>
+            {currentIndex + 1} / {uris.length}
+          </Text>
         )}
+
+        <FlatList
+          key={mountKey}
+          style={styles.list}
+          data={uris}
+          keyExtractor={(uri, index) => `${uri}-${index}`}
+          horizontal
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          initialScrollIndex={safeInitialIndex}
+          getItemLayout={(_, index) => ({ length: screenWidth, offset: screenWidth * index, index })}
+          onMomentumScrollEnd={handleMomentumScrollEnd}
+          renderItem={({ item }) => (
+            <ZoomableImagePage uri={item} pageWidth={screenWidth} screenHeight={screenHeight} />
+          )}
+        />
       </View>
     </Modal>
   );
@@ -122,6 +176,23 @@ const styles = StyleSheet.create({
     right: 20,
     zIndex: 1,
     padding: 6,
+  },
+  counter: {
+    position: 'absolute',
+    top: 56,
+    left: 20,
+    zIndex: 1,
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  list: {
+    flex: 1,
+    width: '100%',
+  },
+  page: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   imageArea: {
     width: '100%',

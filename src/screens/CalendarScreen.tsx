@@ -12,7 +12,7 @@ import {
 import { NavigationProp, useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { loadItems, saveItems } from '../storage/storage';
+import { createItem, deleteItem, loadItems } from '../storage/storage';
 import { Memo, STORAGE_KEYS, ScheduleEvent, Todo } from '../types';
 import { colors } from '../theme/colors';
 import { getMonthMatrix, toDateKey, WEEKDAY_LABELS } from '../utils/date';
@@ -72,11 +72,6 @@ export default function CalendarScreen() {
     }, [])
   );
 
-  const persist = useCallback((items: ScheduleEvent[]) => {
-    setEvents(items);
-    saveItems(STORAGE_KEYS.SCHEDULES, items);
-  }, []);
-
   const weeks = useMemo(
     () => getMonthMatrix(viewYear, viewMonth),
     [viewYear, viewMonth]
@@ -135,12 +130,14 @@ export default function CalendarScreen() {
       title,
       createdAt: Date.now(),
     };
-    persist([...events, newEvent]);
+    setEvents([...events, newEvent]);
+    createItem(STORAGE_KEYS.SCHEDULES, newEvent);
     setInput('');
   };
 
   const deleteEvent = (id: string) => {
-    persist(events.filter((e) => e.id !== id));
+    setEvents(events.filter((e) => e.id !== id));
+    deleteItem(STORAGE_KEYS.SCHEDULES, id);
   };
 
   if (!loaded) return <View style={styles.container} />;

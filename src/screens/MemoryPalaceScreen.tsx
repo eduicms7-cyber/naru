@@ -104,7 +104,9 @@ export default function MemoryPalaceScreen({
                 return (
                   <View style={[styles.cardWrap, { width }]}>
                     <View style={[styles.card, { backgroundColor: memo.color || colors.card }]}>
-                      {memo.imageUri && <MemoImage uri={memo.imageUri} maxHeight={280} />}
+                      {memo.imageUris && memo.imageUris.length > 0 && (
+                        <MemoImage uris={memo.imageUris} maxHeight={280} />
+                      )}
                       <MemoBody memo={memo} textStyle={styles.cardText} />
                       {memo.tags && memo.tags.length > 0 && (
                         <View style={styles.tagRow}>

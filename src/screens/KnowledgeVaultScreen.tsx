@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   FlatList,
+  Image,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -15,7 +16,7 @@ import { NavigationProp, RouteProp, useFocusEffect, useNavigation, useRoute } fr
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
-import { loadItems, saveItems } from '../storage/storage';
+import { createItem, deleteItem, loadItems, updateItem } from '../storage/storage';
 import { ChecklistItem, Memo, STORAGE_KEYS, Todo } from '../types';
 import { colors, cardColors } from '../theme/colors';
 import { isDueForReview, markRemembered, newMemoReviewFields } from '../memory/spacedRepetition';
@@ -61,7 +62,7 @@ export default function KnowledgeVaultScreen() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [text, setText] = useState('');
   const [textSelection, setTextSelection] = useState({ start: 0, end: 0 });
-  const [imageUri, setImageUri] = useState<string | undefined>(undefined);
+  const [imageUris, setImageUris] = useState<string[]>([]);
   const [color, setColor] = useState<string | undefined>(undefined);
   const [tagsInput, setTagsInput] = useState('');
   const [noteType, setNoteType] = useState<'text' | 'checklist'>('text');
@@ -72,11 +73,6 @@ export default function KnowledgeVaultScreen() {
   const [palaceOpen, setPalaceOpen] = useState(false);
   // 표시용이 아니라 기억의 궁전(잠금화면/앱 내)에 오늘 할 일을 전달하고 완료 체크를 반영하기 위한 값.
   const [todayTodos, setTodayTodos] = useState<Todo[]>([]);
-
-  const persist = useCallback((items: Memo[]) => {
-    setMemos(items);
-    saveItems(STORAGE_KEYS.MEMOS, items);
-  }, []);
 
   const dueMemos = useMemo(
     () => memos.filter((m) => isDueForReview(m, now)),
@@ -117,7 +113,10 @@ export default function KnowledgeVaultScreen() {
           const updated = items.map((m) =>
             pendingIds.includes(m.id) ? markRemembered(m, completedAt) : m
           );
-          persist(updated);
+          setMemos(updated);
+          updated
+            .filter((m) => pendingIds.includes(m.id))
+            .forEach((m) => updateItem(STORAGE_KEYS.MEMOS, m));
         } else {
           setMemos(items);
         }
@@ -128,7 +127,7 @@ export default function KnowledgeVaultScreen() {
         const items = await loadItems<Todo>(STORAGE_KEYS.TODOS);
         setTodayTodos(items);
       })();
-    }, [persist])
+    }, [])
   );
 
   const incompleteTodos = useMemo(() => todayTodos.filter((t) => !t.done), [todayTodos]);
@@ -160,14 +159,15 @@ export default function KnowledgeVaultScreen() {
       t.id === id ? { ...t, done: true, completedAt: Date.now() } : t
     );
     setTodayTodos(updated);
-    saveItems(STORAGE_KEYS.TODOS, updated);
+    const changed = updated.find((t) => t.id === id);
+    if (changed) updateItem(STORAGE_KEYS.TODOS, changed);
   };
 
   const openComposer = () => {
     setEditingId(null);
     setText('');
     setTextSelection({ start: 0, end: 0 });
-    setImageUri(undefined);
+    setImageUris([]);
     setColor(undefined);
     setTagsInput('');
     setNoteType('text');
@@ -179,7 +179,7 @@ export default function KnowledgeVaultScreen() {
     setEditingId(item.id);
     setText(item.text);
     setTextSelection({ start: 0, end: 0 });
-    setImageUri(item.imageUri);
+    setImageUris(item.imageUris ?? []);
     setColor(item.color);
     setTagsInput((item.tags ?? []).join(', '));
     setNoteType(item.noteType === 'checklist' ? 'checklist' : 'text');
@@ -237,7 +237,7 @@ export default function KnowledgeVaultScreen() {
     setChecklistItems((items) => items.filter((it) => it.id !== id));
   };
 
-  const pickImage = async () => {
+  const pickImages = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
       showAlert('권한 필요', '이미지를 첨부하려면 사진 접근 권한이 필요합니다.');
@@ -246,10 +246,15 @@ export default function KnowledgeVaultScreen() {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       quality: 0.7,
+      allowsMultipleSelection: true,
     });
     if (!result.canceled && result.assets.length > 0) {
-      setImageUri(result.assets[0].uri);
+      setImageUris((prev) => [...prev, ...result.assets.map((asset) => asset.uri)]);
     }
+  };
+
+  const removeImageAt = (index: number) => {
+    setImageUris((prev) => prev.filter((_, i) => i !== index));
   };
 
   const saveMemo = () => {
@@ -258,19 +263,24 @@ export default function KnowledgeVaultScreen() {
       .map((item) => ({ ...item, text: item.text.trim() }))
       .filter((item) => item.text.length > 0);
     const hasContent =
-      noteType === 'checklist' ? trimmedItems.length > 0 || !!imageUri || !!trimmed : !!trimmed || !!imageUri;
+      noteType === 'checklist'
+        ? trimmedItems.length > 0 || imageUris.length > 0 || !!trimmed
+        : !!trimmed || imageUris.length > 0;
     if (!hasContent) return;
     const tags = parseTags(tagsInput);
     const shared = {
       text: trimmed,
-      imageUri,
+      imageUris: imageUris.length > 0 ? imageUris : undefined,
       color,
       tags,
       noteType,
       checklistItems: noteType === 'checklist' ? trimmedItems : [],
     };
     if (editingId) {
-      persist(memos.map((m) => (m.id === editingId ? { ...m, ...shared } : m)));
+      const updated = memos.map((m) => (m.id === editingId ? { ...m, ...shared } : m));
+      setMemos(updated);
+      const changed = updated.find((m) => m.id === editingId);
+      if (changed) updateItem(STORAGE_KEYS.MEMOS, changed);
     } else {
       const createdAt = Date.now();
       const newMemo: Memo = {
@@ -279,24 +289,26 @@ export default function KnowledgeVaultScreen() {
         createdAt,
         ...newMemoReviewFields(createdAt),
       };
-      persist([newMemo, ...memos]);
+      setMemos([newMemo, ...memos]);
+      createItem(STORAGE_KEYS.MEMOS, newMemo);
     }
     setComposerOpen(false);
   };
 
   const toggleChecklistItem = (memoId: string, itemId: string) => {
-    persist(
-      memos.map((m) =>
-        m.id === memoId
-          ? {
-              ...m,
-              checklistItems: (m.checklistItems ?? []).map((item) =>
-                item.id === itemId ? { ...item, done: !item.done } : item
-              ),
-            }
-          : m
-      )
+    const updated = memos.map((m) =>
+      m.id === memoId
+        ? {
+            ...m,
+            checklistItems: (m.checklistItems ?? []).map((item) =>
+              item.id === itemId ? { ...item, done: !item.done } : item
+            ),
+          }
+        : m
     );
+    setMemos(updated);
+    const changed = updated.find((m) => m.id === memoId);
+    if (changed) updateItem(STORAGE_KEYS.MEMOS, changed);
   };
 
   const addTagToInput = (tag: string) => {
@@ -318,16 +330,17 @@ export default function KnowledgeVaultScreen() {
   };
 
   const togglePinned = (id: string) => {
-    persist(
-      memos.map((m) => {
-        if (m.id !== id) return m;
-        const isPinned = !m.isPinned;
-        // 고정을 켜면 그 카드를 바로 오늘 복습 대상(기억의 궁전)으로 당긴다.
-        return isPinned
-          ? { ...m, isPinned, reviewStage: 0, nextReviewAt: Date.now() }
-          : { ...m, isPinned };
-      })
-    );
+    const updated = memos.map((m) => {
+      if (m.id !== id) return m;
+      const isPinned = !m.isPinned;
+      // 고정을 켜면 그 카드를 바로 오늘 복습 대상(기억의 궁전)으로 당긴다.
+      return isPinned
+        ? { ...m, isPinned, reviewStage: 0, nextReviewAt: Date.now() }
+        : { ...m, isPinned };
+    });
+    setMemos(updated);
+    const changed = updated.find((m) => m.id === id);
+    if (changed) updateItem(STORAGE_KEYS.MEMOS, changed);
     // dueMemos는 포커스 시에만 갱신되는 `now` state 기준이라, 여기서도 갱신해줘야
     // 방금 고정한 카드가 바로 due로 반영된다.
     setNow(Date.now());
@@ -339,14 +352,18 @@ export default function KnowledgeVaultScreen() {
       {
         text: '삭제',
         style: 'destructive',
-        onPress: () => persist(memos.filter((m) => m.id !== id)),
+        onPress: () => {
+          setMemos(memos.filter((m) => m.id !== id));
+          deleteItem(STORAGE_KEYS.MEMOS, id);
+        },
       },
     ]);
   };
 
   const handlePalaceComplete = (memo: Memo) => {
     const updated = markRemembered(memo, Date.now());
-    persist(memos.map((m) => (m.id === updated.id ? updated : m)));
+    setMemos(memos.map((m) => (m.id === updated.id ? updated : m)));
+    updateItem(STORAGE_KEYS.MEMOS, updated);
     setNow(Date.now());
   };
 
@@ -420,7 +437,9 @@ export default function KnowledgeVaultScreen() {
               style={[styles.memoCard, item.color ? { backgroundColor: item.color } : null]}
               onPress={() => toggleExpanded(item.id)}
             >
-              {item.imageUri && <MemoImage uri={item.imageUri} maxHeight={260} />}
+              {item.imageUris && item.imageUris.length > 0 && (
+                <MemoImage uris={item.imageUris} maxHeight={260} />
+              )}
               <MemoBody
                 memo={item}
                 onToggleItem={(itemId) => toggleChecklistItem(item.id, itemId)}
@@ -566,16 +585,22 @@ export default function KnowledgeVaultScreen() {
               </View>
             )}
 
-            {imageUri && (
-              <View style={styles.previewWrap}>
-                <MemoImage uri={imageUri} maxHeight={240} />
-                <Pressable
-                  style={styles.removeImageButton}
-                  onPress={() => setImageUri(undefined)}
-                >
-                  <Ionicons name="close-circle" size={24} color={colors.danger} />
-                </Pressable>
-              </View>
+            {imageUris.length > 0 && (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.previewWrap}
+                contentContainerStyle={styles.previewRow}
+              >
+                {imageUris.map((uri, index) => (
+                  <View key={`${uri}-${index}`} style={styles.previewItem}>
+                    <Image source={{ uri }} style={styles.previewImage} resizeMode="cover" />
+                    <Pressable style={styles.removeImageButton} onPress={() => removeImageAt(index)}>
+                      <Ionicons name="close-circle" size={22} color={colors.danger} />
+                    </Pressable>
+                  </View>
+                ))}
+              </ScrollView>
             )}
 
             <Text style={styles.composerSectionLabel}>색상</Text>
@@ -614,9 +639,9 @@ export default function KnowledgeVaultScreen() {
           </ScrollView>
 
           <View style={[styles.composerToolbar, { paddingBottom: insets.bottom + 12 }]}>
-            <Pressable style={styles.toolbarButton} onPress={pickImage}>
+            <Pressable style={styles.toolbarButton} onPress={pickImages}>
               <Ionicons name="image-outline" size={22} color={colors.primary} />
-              <Text style={styles.toolbarButtonText}>이미지 첨부</Text>
+              <Text style={styles.toolbarButtonText}>이미지 추가</Text>
             </Pressable>
           </View>
         </KeyboardAvoidingView>
@@ -920,13 +945,25 @@ const styles = StyleSheet.create({
     paddingBottom: 6,
   },
   previewWrap: {
-    paddingHorizontal: 20,
     marginBottom: 10,
+  },
+  previewRow: {
+    paddingHorizontal: 20,
+    gap: 10,
+  },
+  previewItem: {
+    position: 'relative',
+  },
+  previewImage: {
+    width: 100,
+    height: 100,
+    borderRadius: 10,
+    backgroundColor: 'rgba(0,0,0,0.04)',
   },
   removeImageButton: {
     position: 'absolute',
-    top: 8,
-    right: 28,
+    top: -8,
+    right: -8,
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
   },

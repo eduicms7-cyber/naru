@@ -14,7 +14,7 @@ import {
 import { NavigationProp, RouteProp, useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { loadItems, saveItems } from '../storage/storage';
+import { createItem, deleteItem, loadItems, updateItem } from '../storage/storage';
 import { STORAGE_KEYS, Todo } from '../types';
 import { colors } from '../theme/colors';
 import { useAuth } from '../auth/AuthContext';
@@ -42,11 +42,6 @@ export default function TodayScreen() {
   const [formOpen, setFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
-  const persist = useCallback((items: Todo[]) => {
-    setTodos(items);
-    saveItems(STORAGE_KEYS.TODOS, items);
-  }, []);
-
   useFocusEffect(
     useCallback(() => {
       (async () => {
@@ -58,13 +53,16 @@ export default function TodayScreen() {
           const updated = items.map((t) =>
             pendingIds.includes(t.id) ? { ...t, done: true, completedAt } : t
           );
-          persist(updated);
+          setTodos(updated);
+          updated
+            .filter((t) => pendingIds.includes(t.id))
+            .forEach((t) => updateItem(STORAGE_KEYS.TODOS, t));
         } else {
           setTodos(items);
         }
         setLoaded(true);
       })();
-    }, [persist])
+    }, [])
   );
 
   const openAddForm = () => {
@@ -86,7 +84,10 @@ export default function TodayScreen() {
     if (!title) return;
     const tags = parseTags(tagsInput);
     if (editingId) {
-      persist(todos.map((t) => (t.id === editingId ? { ...t, title, tags } : t)));
+      const updated = todos.map((t) => (t.id === editingId ? { ...t, title, tags } : t));
+      setTodos(updated);
+      const changed = updated.find((t) => t.id === editingId);
+      if (changed) updateItem(STORAGE_KEYS.TODOS, changed);
     } else {
       const newTodo: Todo = {
         id: Date.now().toString(),
@@ -95,7 +96,8 @@ export default function TodayScreen() {
         createdAt: Date.now(),
         tags,
       };
-      persist([newTodo, ...todos]);
+      setTodos([newTodo, ...todos]);
+      createItem(STORAGE_KEYS.TODOS, newTodo);
     }
     setFormOpen(false);
   };
@@ -112,17 +114,19 @@ export default function TodayScreen() {
   }, [route.params?.focusTodoId, todos]);
 
   const toggleTodo = (id: string) => {
-    persist(
-      todos.map((t) =>
-        t.id === id
-          ? { ...t, done: !t.done, completedAt: !t.done ? Date.now() : undefined }
-          : t
-      )
+    const updated = todos.map((t) =>
+      t.id === id
+        ? { ...t, done: !t.done, completedAt: !t.done ? Date.now() : undefined }
+        : t
     );
+    setTodos(updated);
+    const changed = updated.find((t) => t.id === id);
+    if (changed) updateItem(STORAGE_KEYS.TODOS, changed);
   };
 
   const deleteTodo = (id: string) => {
-    persist(todos.filter((t) => t.id !== id));
+    setTodos(todos.filter((t) => t.id !== id));
+    deleteItem(STORAGE_KEYS.TODOS, id);
   };
 
   const allTags = useMemo(() => {

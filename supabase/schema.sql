@@ -16,6 +16,7 @@ create table if not exists memos (
   user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
   text text not null default '',
   image_uri text,
+  image_uris text[] not null default '{}',
   created_at bigint not null,
   review_stage int not null default 0,
   next_review_at bigint not null,
@@ -36,6 +37,13 @@ create table if not exists memos (
 -- alter table memos add column if not exists checklist_items jsonb not null default '[]';
 -- alter table todos add column if not exists completed_at bigint;
 -- alter table todos add column if not exists tags text[] not null default '{}';
+
+-- 카드 하나당 이미지 여러 장 첨부 기능: 기존 memos 테이블에 image_uris 배열 컬럼을 추가하고,
+-- 이미 있던 단일 이미지(image_uri) 값을 배열의 첫 원소로 옮긴다. image_uri 컬럼은 당분간
+-- 그대로 남겨둔다(하위호환용 병행 기록).
+-- alter table memos add column if not exists image_uris text[] not null default '{}';
+-- update memos set image_uris = array[image_uri]
+--   where image_uri is not null and (image_uris is null or array_length(image_uris, 1) is null);
 
 create table if not exists schedules (
   id text primary key,

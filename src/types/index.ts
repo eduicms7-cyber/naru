@@ -16,7 +16,9 @@ export interface ChecklistItem {
 export interface Memo {
   id: string;
   text: string;
-  imageUri?: string;
+  // 카드 하나에 여러 장 첨부 가능. 구버전 데이터(단일 image_uri)는 storage.ts에서
+  // 배열로 변환해서 채워준다.
+  imageUris?: string[];
   createdAt: number;
   reviewStage: number;
   nextReviewAt: number;

@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
-import { saveItems } from './storage';
-import { STORAGE_KEYS } from '../types';
+import { createItem } from './storage';
+import { Memo, ScheduleEvent, STORAGE_KEYS, Todo } from '../types';
 
 // Pre-Supabase builds stored data under these AsyncStorage keys (see storage.ts history).
 // Web never had AsyncStorage data, so this only matters on native.
@@ -26,17 +26,17 @@ export async function migrateLegacyDataIfNeeded(): Promise<void> {
   if (Platform.OS === 'web') return;
 
   const [todos, memos, schedules] = await Promise.all([
-    loadLegacy(LEGACY_KEYS.TODOS),
-    loadLegacy(LEGACY_KEYS.MEMOS),
-    loadLegacy(LEGACY_KEYS.SCHEDULES),
+    loadLegacy<Todo>(LEGACY_KEYS.TODOS),
+    loadLegacy<Memo>(LEGACY_KEYS.MEMOS),
+    loadLegacy<ScheduleEvent>(LEGACY_KEYS.SCHEDULES),
   ]);
 
   if (todos.length === 0 && memos.length === 0 && schedules.length === 0) return;
 
   await Promise.all([
-    todos.length > 0 ? saveItems(STORAGE_KEYS.TODOS, todos) : Promise.resolve(),
-    memos.length > 0 ? saveItems(STORAGE_KEYS.MEMOS, memos) : Promise.resolve(),
-    schedules.length > 0 ? saveItems(STORAGE_KEYS.SCHEDULES, schedules) : Promise.resolve(),
+    ...todos.map((item) => createItem(STORAGE_KEYS.TODOS, item)),
+    ...memos.map((item) => createItem(STORAGE_KEYS.MEMOS, item)),
+    ...schedules.map((item) => createItem(STORAGE_KEYS.SCHEDULES, item)),
   ]);
 
   await Promise.all([
