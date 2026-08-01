@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   FlatList,
   KeyboardAvoidingView,
+  Linking,
   Modal,
   Platform,
   Pressable,
@@ -22,6 +23,8 @@ import { parseTags } from '../utils/tags';
 import { formatShortDate } from '../utils/date';
 import { getPendingTodoCompletions } from '../native/ReviewWidget';
 import type { TabParamList } from '../navigation/TabNavigator';
+
+const APK_DOWNLOAD_URL = 'https://github.com/eduicms7-cyber/naru/releases/latest/download/app-release.apk';
 
 function formatTodayLabel(): string {
   const days = ['일', '월', '화', '수', '목', '금', '토'];
@@ -152,9 +155,16 @@ export default function TodayScreen() {
       <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
         <View style={styles.headerTopRow}>
           <Text style={styles.dateLabel}>{formatTodayLabel()}</Text>
-          <Pressable onPress={signOut} hitSlop={8}>
-            <Text style={styles.signOutText}>로그아웃</Text>
-          </Pressable>
+          <View style={styles.headerActions}>
+            {Platform.OS === 'web' && (
+              <Pressable onPress={() => Linking.openURL(APK_DOWNLOAD_URL)} hitSlop={8}>
+                <Ionicons name="download-outline" size={20} color={colors.subtext} />
+              </Pressable>
+            )}
+            <Pressable onPress={signOut} hitSlop={8}>
+              <Ionicons name="log-out-outline" size={20} color={colors.subtext} />
+            </Pressable>
+          </View>
         </View>
         <Text style={styles.title}>오늘 할 일</Text>
         {todos.length > 0 && (
@@ -320,9 +330,10 @@ const styles = StyleSheet.create({
     color: colors.subtext,
     marginBottom: 4,
   },
-  signOutText: {
-    fontSize: 13,
-    color: colors.subtext,
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
   },
   title: {
     fontSize: 28,
