@@ -19,6 +19,7 @@ import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.ViewFlipper
 import androidx.core.app.NotificationManagerCompat
+import com.naru.app.R
 
 // 잠금화면 위에서 오늘 할 일 카드 + 오늘 복습할 카드를 슬라이드로 보여주는 "기억의 궁전" 풀스크린 액티비티.
 // WakeMonitorService가 ACTION_SCREEN_ON을 감지했을 때 띄운다.
@@ -232,7 +233,7 @@ class WakeReviewActivity : Activity() {
         text = memo.text.ifEmpty { "이미지 메모" }
         setTextColor(if (memo.color != null) Color.parseColor("#1C1C1E") else Color.WHITE)
         textSize = 20f
-        gravity = Gravity.CENTER
+        gravity = Gravity.CENTER_VERTICAL or Gravity.START
       }, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT).apply {
         gravity = Gravity.CENTER
       })
@@ -278,11 +279,14 @@ class WakeReviewActivity : Activity() {
     if (total == 0) return
     val next = (index + total) % total
     if (animateForward) {
+      // 오른쪽에서 왼쪽으로 스와이프(다음 카드)할 땐 새 카드가 오른쪽에서 들어오고
+      // 기존 카드는 왼쪽으로 나가야 손가락 방향과 맞는다. android.R.anim에는 이
+      // 방향 조합이 없어서 res/anim에 직접 정의해뒀다.
+      f.setInAnimation(this, R.anim.slide_in_right)
+      f.setOutAnimation(this, R.anim.slide_out_left)
+    } else {
       f.setInAnimation(this, android.R.anim.slide_in_left)
       f.setOutAnimation(this, android.R.anim.slide_out_right)
-    } else {
-      f.setInAnimation(this, android.R.anim.fade_in)
-      f.setOutAnimation(this, android.R.anim.fade_out)
     }
     currentIndex = next
     f.displayedChild = currentIndex

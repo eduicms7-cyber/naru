@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- android.R.anim.slide_in_left의 반대 방향. 프레임워크가 이 방향 버전은 공개 리소스로
+     제공하지 않아서(slide_in_left/slide_out_right만 공개) 직접 정의한다. -->
+<set xmlns:android="http://schemas.android.com/apk/res/android">
+    <translate
+        android:fromXDelta="100%p"
+        android:toXDelta="0"
+        android:duration="@android:integer/config_mediumAnimTime" />
+    <alpha
+        android:fromAlpha="0.0"
+        android:toAlpha="1.0"
+        android:duration="@android:integer/config_mediumAnimTime" />
+</set>
