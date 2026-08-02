@@ -16,6 +16,14 @@ Naru는 휴대폰을 열었을 때 오늘 할 일과 기억할 정보를 바로 
 - 이미지 첨부: `expo-image-picker` (저장 시 Supabase Storage `memo-images` 버킷에 업로드됨)
 - 아이콘: `@expo/vector-icons` (Ionicons)
 
+### 로컬 전용 모드 (로그인/인터넷 없이 폰에만 저장)
+
+같은 코드베이스에서 빌드 시점 환경변수 `EXPO_PUBLIC_STORAGE_MODE=local`을 주면 로그인 화면 없이 바로 쓰는 "Naru Local" 버전이 됩니다(미설정 시 지금까지와 동일한 Supabase 클라우드 모드).
+- `App.tsx`: `IS_LOCAL_MODE`면 세션 유무와 무관하게 바로 `<TabNavigator />`를 렌더링(로그인 화면 스킵).
+- `src/storage/storage.ts`: `loadItems`/`createItem`/`updateItem`/`deleteItem` 각 함수 맨 앞에서 로컬 모드면 `src/storage/localStorage.ts`(AsyncStorage 전용, Supabase 미사용, 테이블당 `naru_local_${table}` 키에 배열 통째로 저장)로 위임 — 화면 코드는 이 분기를 몰라도 됨. 클라우드 로직(업로드/캐시/재시도 큐)은 로컬 모드에서 전혀 실행되지 않습니다.
+- `src/screens/TodayScreen.tsx`: 로컬 모드에서는 로그아웃 버튼을 숨깁니다.
+- app.json/네이티브 빌드 설정(패키지명, 앱 이름 등 실제로 두 개의 APK를 구분하는 부분)은 이 문서의 범위가 아니며 빌드할 때 별도로 관리합니다.
+
 ## 실행 방법
 
 ```

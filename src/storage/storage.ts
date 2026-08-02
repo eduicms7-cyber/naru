@@ -4,8 +4,14 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { decode } from 'base64-arraybuffer';
 import { supabase } from '../lib/supabase';
 import { Favorite, Memo, ScheduleEvent, STORAGE_KEYS, Todo } from '../types';
+import * as localStorage from './localStorage';
 
 type TableName = (typeof STORAGE_KEYS)[keyof typeof STORAGE_KEYS];
+
+// Build-time flag for the login-free, phone-only variant — see CLAUDE.md.
+// When set, every exported function below delegates to localStorage.ts (AsyncStorage only,
+// no Supabase) and the cloud logic underneath never runs.
+const IS_LOCAL_MODE = process.env.EXPO_PUBLIC_STORAGE_MODE === 'local';
 
 async function getUserId(): Promise<string | null> {
   // getSession() reads the persisted session locally; unlike getUser() it doesn't
@@ -303,6 +309,8 @@ export async function flushPendingOps(table: TableName, userId: string): Promise
 }
 
 export async function loadItems<T>(table: TableName): Promise<T[]> {
+  if (IS_LOCAL_MODE) return localStorage.loadItems<T>(table);
+
   const userId = await getUserId();
   if (!userId) return [];
 
@@ -319,6 +327,8 @@ export async function loadItems<T>(table: TableName): Promise<T[]> {
 }
 
 export async function createItem<T extends { id: string }>(table: TableName, item: T): Promise<void> {
+  if (IS_LOCAL_MODE) return localStorage.createItem(table, item);
+
   const userId = await getUserId();
   if (!userId) return;
 
@@ -337,6 +347,8 @@ export async function createItem<T extends { id: string }>(table: TableName, ite
 }
 
 export async function updateItem<T extends { id: string }>(table: TableName, item: T): Promise<void> {
+  if (IS_LOCAL_MODE) return localStorage.updateItem(table, item);
+
   const userId = await getUserId();
   if (!userId) return;
 
@@ -354,6 +366,8 @@ export async function updateItem<T extends { id: string }>(table: TableName, ite
 }
 
 export async function deleteItem(table: TableName, id: string): Promise<void> {
+  if (IS_LOCAL_MODE) return localStorage.deleteItem(table, id);
+
   const userId = await getUserId();
   if (!userId) return;
 

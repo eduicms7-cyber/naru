@@ -25,6 +25,9 @@ import { getPendingTodoCompletions } from '../native/ReviewWidget';
 import type { TabParamList } from '../navigation/TabNavigator';
 import appJson from '../../app.json';
 
+// Build-time flag for the login-free, phone-only variant — see CLAUDE.md.
+const IS_LOCAL_MODE = process.env.EXPO_PUBLIC_STORAGE_MODE === 'local';
+
 const APP_VERSION = appJson.expo.version;
 // 안드로이드 릴리즈 APK 파일명(android/app/build.gradle의 outputFileName)에 버전이
 // 들어가므로, 새 버전을 빌드/배포할 때마다 이 URL도 같이 올려줘야 한다.
@@ -172,10 +175,12 @@ export default function TodayScreen() {
                 <Text style={styles.headerActionLabel}>앱 다운로드</Text>
               </Pressable>
             )}
-            <Pressable onPress={signOut} hitSlop={8} style={styles.headerActionButton}>
-              <Ionicons name="log-out-outline" size={20} color={colors.subtext} />
-              <Text style={styles.headerActionLabel}>로그아웃</Text>
-            </Pressable>
+            {!IS_LOCAL_MODE && (
+              <Pressable onPress={signOut} hitSlop={8} style={styles.headerActionButton}>
+                <Ionicons name="log-out-outline" size={20} color={colors.subtext} />
+                <Text style={styles.headerActionLabel}>로그아웃</Text>
+              </Pressable>
+            )}
           </View>
         </View>
         <Text style={styles.title}>오늘 할 일</Text>
