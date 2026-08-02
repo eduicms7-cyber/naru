@@ -91,6 +91,7 @@ export default function MemoryPalaceScreen({
                   return (
                     <ScrollView
                       style={{ width, height: deckHeight || undefined }}
+                      nestedScrollEnabled
                       contentContainerStyle={styles.cardWrap}
                       showsVerticalScrollIndicator={false}
                     >
@@ -114,6 +115,7 @@ export default function MemoryPalaceScreen({
                 return (
                   <ScrollView
                     style={{ width, height: deckHeight || undefined }}
+                    nestedScrollEnabled
                     contentContainerStyle={styles.cardWrap}
                     showsVerticalScrollIndicator={false}
                   >

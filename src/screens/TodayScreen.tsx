@@ -23,8 +23,10 @@ import { parseTags } from '../utils/tags';
 import { formatShortDate } from '../utils/date';
 import { getPendingTodoCompletions } from '../native/ReviewWidget';
 import type { TabParamList } from '../navigation/TabNavigator';
+import appJson from '../../app.json';
 
 const APK_DOWNLOAD_URL = 'https://github.com/eduicms7-cyber/naru/releases/latest/download/app-release.apk';
+const APP_VERSION = appJson.expo.version;
 
 function formatTodayLabel(): string {
   const days = ['일', '월', '화', '수', '목', '금', '토'];
@@ -154,7 +156,9 @@ export default function TodayScreen() {
     >
       <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
         <View style={styles.headerTopRow}>
-          <Text style={styles.dateLabel}>{formatTodayLabel()}</Text>
+          <Text style={styles.dateLabel}>
+            {formatTodayLabel()} · v{APP_VERSION}
+          </Text>
           <View style={styles.headerActions}>
             {Platform.OS === 'web' && (
               <Pressable
