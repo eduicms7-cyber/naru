@@ -38,6 +38,10 @@ export default function MemoryPalaceScreen({
   onClose,
 }: Props) {
   const { width } = useWindowDimensions();
+  // FlatList가 가로 페이지 셀에 자동으로 높이를 채워주지 않아(웹에서 특히),
+  // 카드가 셀보다 길면 스크롤 없이 그냥 잘린다 — 덱 영역 실측 높이를 재서
+  // 각 페이지의 ScrollView에 직접 넘겨준다.
+  const [deckHeight, setDeckHeight] = useState(0);
   // "다시보기"로 넘긴 카드의 id. 데이터는 그대로 두고 이번 세션 화면에서만 숨긴다 —
   // 궁전을 다시 열면(visible이 true가 될 때) 비워지므로 그때는 다시 나타난다.
   const [skippedIds, setSkippedIds] = useState<Set<string>>(new Set());
@@ -76,6 +80,7 @@ export default function MemoryPalaceScreen({
           <>
             <FlatList
               style={styles.deck}
+              onLayout={(e) => setDeckHeight(e.nativeEvent.layout.height)}
               data={pages}
               keyExtractor={(item) => (item.kind === 'todos' ? 'todos' : item.memo.id)}
               horizontal
@@ -85,7 +90,7 @@ export default function MemoryPalaceScreen({
                 if (item.kind === 'todos') {
                   return (
                     <ScrollView
-                      style={{ width }}
+                      style={{ width, height: deckHeight || undefined }}
                       contentContainerStyle={styles.cardWrap}
                       showsVerticalScrollIndicator={false}
                     >
@@ -108,7 +113,7 @@ export default function MemoryPalaceScreen({
                 const memo = item.memo;
                 return (
                   <ScrollView
-                    style={{ width }}
+                    style={{ width, height: deckHeight || undefined }}
                     contentContainerStyle={styles.cardWrap}
                     showsVerticalScrollIndicator={false}
                   >
