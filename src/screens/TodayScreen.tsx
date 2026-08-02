@@ -157,12 +157,18 @@ export default function TodayScreen() {
           <Text style={styles.dateLabel}>{formatTodayLabel()}</Text>
           <View style={styles.headerActions}>
             {Platform.OS === 'web' && (
-              <Pressable onPress={() => Linking.openURL(APK_DOWNLOAD_URL)} hitSlop={8}>
+              <Pressable
+                onPress={() => Linking.openURL(APK_DOWNLOAD_URL)}
+                hitSlop={8}
+                style={styles.headerActionButton}
+              >
                 <Ionicons name="download-outline" size={20} color={colors.subtext} />
+                <Text style={styles.headerActionLabel}>앱 다운로드</Text>
               </Pressable>
             )}
-            <Pressable onPress={signOut} hitSlop={8}>
+            <Pressable onPress={signOut} hitSlop={8} style={styles.headerActionButton}>
               <Ionicons name="log-out-outline" size={20} color={colors.subtext} />
+              <Text style={styles.headerActionLabel}>로그아웃</Text>
             </Pressable>
           </View>
         </View>
@@ -334,6 +340,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 16,
+  },
+  headerActionButton: {
+    alignItems: 'center',
+    gap: 2,
+  },
+  headerActionLabel: {
+    fontSize: 10,
+    color: colors.subtext,
   },
   title: {
     fontSize: 28,
