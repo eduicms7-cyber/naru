@@ -38,10 +38,14 @@ function ZoomableImagePage({
   uri,
   pageWidth,
   screenHeight,
+  onPinchStart,
+  onPinchEnd,
 }: {
   uri: string;
   pageWidth: number;
   screenHeight: number;
+  onPinchStart?: () => void;
+  onPinchEnd?: () => void;
 }) {
   const size = useImageSize(uri);
   const [scale, setScale] = useState(1);
@@ -49,7 +53,19 @@ function ZoomableImagePage({
 
   const panResponder = useRef(
     PanResponder.create({
+      // 이미지가 여러 장이면 이 페이지가 가로 스와이프용 FlatList 안에 들어있어서,
+      // 손가락 두 개를 뗐다 붙였다 하는 핀치 제스처를 FlatList의 가로 스크롤 제스처가
+      // 먼저 가로채 버리는 경우가 있었다. onStartShouldSet(Capture)를 둘 다 써서
+      // 두 번째 손가락이 닿는 즉시(움직이기 전에) 이 PanResponder가 선점하도록 한다.
+      onStartShouldSetPanResponder: (evt) => evt.nativeEvent.touches.length === 2,
+      onStartShouldSetPanResponderCapture: (evt) => evt.nativeEvent.touches.length === 2,
       onMoveShouldSetPanResponder: (evt) => evt.nativeEvent.touches.length === 2,
+      onMoveShouldSetPanResponderCapture: (evt) => evt.nativeEvent.touches.length === 2,
+      // 이 손가락 두 개 제스처가 진행되는 동안은 바깥 FlatList의 가로 스크롤도
+      // 아예 꺼버려서, 혹시 responder를 뺏기더라도 애초에 경쟁할 대상이 없게 한다.
+      onPanResponderGrant: () => {
+        onPinchStart?.();
+      },
       onPanResponderMove: (evt) => {
         const touches = evt.nativeEvent.touches;
         if (touches.length !== 2) return;
@@ -64,9 +80,11 @@ function ZoomableImagePage({
       },
       onPanResponderRelease: () => {
         lastDistance.current = null;
+        onPinchEnd?.();
       },
       onPanResponderTerminate: () => {
         lastDistance.current = null;
+        onPinchEnd?.();
       },
     })
   ).current;
@@ -114,6 +132,7 @@ export default function ImageViewerModal({ visible, uris, initialIndex = 0, onCl
   const [mountKey, setMountKey] = useState(0);
   const safeInitialIndex = clamp(initialIndex, 0, Math.max(uris.length - 1, 0));
   const [currentIndex, setCurrentIndex] = useState(safeInitialIndex);
+  const [pinching, setPinching] = useState(false);
 
   useEffect(() => {
     if (visible) {
@@ -150,12 +169,19 @@ export default function ImageViewerModal({ visible, uris, initialIndex = 0, onCl
           keyExtractor={(uri, index) => `${uri}-${index}`}
           horizontal
           pagingEnabled
+          scrollEnabled={!pinching}
           showsHorizontalScrollIndicator={false}
           initialScrollIndex={safeInitialIndex}
           getItemLayout={(_, index) => ({ length: screenWidth, offset: screenWidth * index, index })}
           onMomentumScrollEnd={handleMomentumScrollEnd}
           renderItem={({ item }) => (
-            <ZoomableImagePage uri={item} pageWidth={screenWidth} screenHeight={screenHeight} />
+            <ZoomableImagePage
+              uri={item}
+              pageWidth={screenWidth}
+              screenHeight={screenHeight}
+              onPinchStart={() => setPinching(true)}
+              onPinchEnd={() => setPinching(false)}
+            />
           )}
         />
       </View>
