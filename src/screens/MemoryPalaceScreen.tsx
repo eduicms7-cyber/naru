@@ -3,6 +3,7 @@ import {
   FlatList,
   Modal,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -83,7 +84,11 @@ export default function MemoryPalaceScreen({
               renderItem={({ item }) => {
                 if (item.kind === 'todos') {
                   return (
-                    <View style={[styles.cardWrap, { width }]}>
+                    <ScrollView
+                      style={{ width }}
+                      contentContainerStyle={styles.cardWrap}
+                      showsVerticalScrollIndicator={false}
+                    >
                       <View style={[styles.card, { backgroundColor: colors.card }]}>
                         <Text style={styles.todoCardTitle}>오늘 할 일</Text>
                         {todos.map((todo) => (
@@ -97,12 +102,16 @@ export default function MemoryPalaceScreen({
                           </Pressable>
                         ))}
                       </View>
-                    </View>
+                    </ScrollView>
                   );
                 }
                 const memo = item.memo;
                 return (
-                  <View style={[styles.cardWrap, { width }]}>
+                  <ScrollView
+                    style={{ width }}
+                    contentContainerStyle={styles.cardWrap}
+                    showsVerticalScrollIndicator={false}
+                  >
                     <View style={[styles.card, { backgroundColor: memo.color || colors.card }]}>
                       {memo.imageUris && memo.imageUris.length > 0 && (
                         <MemoImage uris={memo.imageUris} maxHeight={280} />
@@ -126,7 +135,7 @@ export default function MemoryPalaceScreen({
                         </Pressable>
                       </View>
                     </View>
-                  </View>
+                  </ScrollView>
                 );
               }}
             />
@@ -196,7 +205,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   cardWrap: {
-    flex: 1,
+    flexGrow: 1,
     justifyContent: 'center',
     padding: 24,
   },
@@ -215,7 +224,6 @@ const styles = StyleSheet.create({
     fontSize: 20,
     color: colors.text,
     lineHeight: 28,
-    textAlign: 'center',
   },
   tagRow: {
     flexDirection: 'row',
