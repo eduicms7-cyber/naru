@@ -1,6 +1,8 @@
 import React, { useCallback, useState } from 'react';
 import {
+  ActivityIndicator,
   FlatList,
+  Image,
   KeyboardAvoidingView,
   Linking,
   Modal,
@@ -27,6 +29,70 @@ function sortByOrder(items: Favorite[]): Favorite[] {
   return [...items].sort((a, b) => a.order - b.order);
 }
 
+// 구글 파비콘 서비스 — 별도 백엔드 없이 도메인만으로 아이콘을 받아올 수 있고,
+// <Image>로 표시하는 것뿐이라 웹에서도 CORS 문제 없이 동작한다.
+function getFaviconUrl(url: string): string | null {
+  try {
+    const { hostname } = new URL(url);
+    return `https://www.google.com/s2/favicons?domain=${hostname}&sz=64`;
+  } catch {
+    return null;
+  }
+}
+
+const HTML_ENTITIES: Record<string, string> = {
+  '&amp;': '&',
+  '&lt;': '<',
+  '&gt;': '>',
+  '&quot;': '"',
+  '&#39;': "'",
+  '&apos;': "'",
+  '&nbsp;': ' ',
+};
+
+function decodeHtmlEntities(text: string): string {
+  return text.replace(/&(amp|lt|gt|quot|#39|apos|nbsp);/g, (m) => HTML_ENTITIES[m] ?? m);
+}
+
+// URL의 <title>을 가져와 즐겨찾기 제목 자동완성에 쓴다. 사이트가 CORS를 막거나
+// 응답이 느리면 그냥 조용히 실패 — 사용자가 직접 입력하면 된다.
+async function fetchPageTitle(url: string): Promise<string | null> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5000);
+  try {
+    const res = await fetch(url, { signal: controller.signal });
+    const html = await res.text();
+    const match = html.match(/<title[^>]*>([^<]*)<\/title>/i);
+    if (!match) return null;
+    const title = decodeHtmlEntities(match[1]).trim();
+    return title.length > 0 ? title : null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function FavoriteIcon({ url }: { url: string }) {
+  const [failed, setFailed] = useState(false);
+  const faviconUrl = failed ? null : getFaviconUrl(url);
+
+  if (!faviconUrl) {
+    return (
+      <View style={styles.faviconFallback}>
+        <Ionicons name="link-outline" size={16} color={colors.subtext} />
+      </View>
+    );
+  }
+  return (
+    <Image
+      source={{ uri: faviconUrl }}
+      style={styles.favicon}
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
 export default function FavoritesScreen() {
   const insets = useSafeAreaInsets();
   const [favorites, setFavorites] = useState<Favorite[]>([]);
@@ -35,6 +101,7 @@ export default function FavoritesScreen() {
   const [urlInput, setUrlInput] = useState('');
   const [formOpen, setFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [fetchingTitle, setFetchingTitle] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -58,6 +125,20 @@ export default function FavoritesScreen() {
     setTitleInput(favorite.title);
     setUrlInput(favorite.url);
     setFormOpen(true);
+  };
+
+  // URL 입력을 끝내면(포커스 아웃) 제목이 비어있는 경우에만 페이지 <title>을 가져와 채워준다 —
+  // 사용자가 이미 뭔가 입력해뒀다면 덮어쓰지 않는다.
+  const handleUrlBlur = async () => {
+    const url = urlInput.trim();
+    if (!url || titleInput.trim().length > 0) return;
+    const normalizedUrl = normalizeUrl(url);
+    setFetchingTitle(true);
+    const fetchedTitle = await fetchPageTitle(normalizedUrl);
+    setFetchingTitle(false);
+    if (fetchedTitle && titleInput.trim().length === 0) {
+      setTitleInput(fetchedTitle);
+    }
   };
 
   const saveFavorite = () => {
@@ -139,12 +220,15 @@ export default function FavoritesScreen() {
         renderItem={({ item, index }) => (
           <View style={styles.row}>
             <Pressable style={styles.rowBody} onPress={() => openFavorite(item.url)}>
-              <Text style={styles.rowTitle} numberOfLines={1}>
-                {item.title}
-              </Text>
-              <Text style={styles.rowUrl} numberOfLines={1}>
-                {item.url}
-              </Text>
+              <FavoriteIcon url={item.url} />
+              <View style={styles.rowTexts}>
+                <Text style={styles.rowTitle} numberOfLines={1}>
+                  {item.title}
+                </Text>
+                <Text style={styles.rowUrl} numberOfLines={1}>
+                  {item.url}
+                </Text>
+              </View>
             </Pressable>
             <View style={styles.rowActions}>
               <Pressable onPress={() => moveUp(index)} disabled={index === 0} hitSlop={8}>
@@ -197,25 +281,31 @@ export default function FavoritesScreen() {
             </View>
             <TextInput
               style={styles.input}
-              placeholder="제목을 입력하세요"
-              placeholderTextColor={colors.subtext}
-              value={titleInput}
-              onChangeText={setTitleInput}
-              returnKeyType="next"
-              autoFocus
-            />
-            <TextInput
-              style={styles.input}
               placeholder="URL을 입력하세요 (예: example.com)"
               placeholderTextColor={colors.subtext}
               value={urlInput}
               onChangeText={setUrlInput}
-              onSubmitEditing={saveFavorite}
-              returnKeyType="done"
+              onBlur={handleUrlBlur}
+              returnKeyType="next"
               autoCapitalize="none"
               autoCorrect={false}
               keyboardType="url"
+              autoFocus
             />
+            <View style={styles.titleInputRow}>
+              <TextInput
+                style={[styles.input, styles.titleInput]}
+                placeholder="제목 (URL 입력하면 자동으로 채워져요)"
+                placeholderTextColor={colors.subtext}
+                value={titleInput}
+                onChangeText={setTitleInput}
+                onSubmitEditing={saveFavorite}
+                returnKeyType="done"
+              />
+              {fetchingTitle && (
+                <ActivityIndicator size="small" color={colors.subtext} style={styles.titleSpinner} />
+              )}
+            </View>
           </View>
         </KeyboardAvoidingView>
       </Modal>
@@ -265,6 +355,25 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   rowBody: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  favicon: {
+    width: 28,
+    height: 28,
+    borderRadius: 6,
+  },
+  faviconFallback: {
+    width: 28,
+    height: 28,
+    borderRadius: 6,
+    backgroundColor: colors.background,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rowTexts: {
     flex: 1,
   },
   rowTitle: {
@@ -338,5 +447,16 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     fontSize: 15,
     color: colors.text,
+  },
+  titleInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  titleInput: {
+    flex: 1,
+  },
+  titleSpinner: {
+    position: 'absolute',
+    right: 14,
   },
 });
