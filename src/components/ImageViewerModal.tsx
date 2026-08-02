@@ -12,7 +12,7 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { useImageSize } from '../utils/useImageSize';
 
@@ -123,7 +123,9 @@ export default function ImageViewerModal({ visible, uris, initialIndex = 0, onCl
 
   return (
     <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
-      <View style={styles.overlay}>
+      {/* RN Modal은 안드로이드에서 별도 네이티브 창으로 뜨기 때문에 App.tsx 최상단의
+          GestureHandlerRootView가 이 안까지 커버하지 못한다 — Modal 내부에도 하나 더 필요. */}
+      <GestureHandlerRootView style={styles.overlay}>
         <Pressable style={styles.closeButton} onPress={onClose} hitSlop={10}>
           <Ionicons name="close" size={28} color="#FFFFFF" />
         </Pressable>
@@ -149,7 +151,7 @@ export default function ImageViewerModal({ visible, uris, initialIndex = 0, onCl
             <ZoomableImagePage uri={item} pageWidth={screenWidth} screenHeight={screenHeight} />
           )}
         />
-      </View>
+      </GestureHandlerRootView>
     </Modal>
   );
 }

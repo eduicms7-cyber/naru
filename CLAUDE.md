@@ -15,7 +15,7 @@ Naru는 휴대폰을 열었을 때 오늘 할 일과 기억할 정보를 바로 
 - 백엔드/동기화: Supabase (Postgres + Auth + Storage) — 로그인 후 휴대폰/웹이 같은 데이터를 공유합니다. (`src/lib/supabase.ts`, `src/auth/AuthContext.tsx`)
 - 이미지 첨부: `expo-image-picker` (저장 시 Supabase Storage `memo-images` 버킷에 업로드됨)
 - 아이콘: `@expo/vector-icons` (Ionicons)
-- 제스처: `react-native-gesture-handler` (`ImageViewerModal.tsx`의 핀치줌 — 이 프로젝트는 새 아키텍처(Fabric)를 쓰는데, 그 환경에서 `PanResponder`로 직접 만든 멀티터치 핀치가 터치 이벤트 자체를 못 받는 문제가 있어서 교체됨. `App.tsx` 최상단이 `GestureHandlerRootView`로 감싸져 있어야 동작함)
+- 제스처: `react-native-gesture-handler` (`ImageViewerModal.tsx`의 핀치줌 — 이 프로젝트는 새 아키텍처(Fabric)를 쓰는데, 그 환경에서 `PanResponder`로 직접 만든 멀티터치 핀치가 터치 이벤트 자체를 못 받는 문제가 있어서 교체됨. `App.tsx` 최상단이 `GestureHandlerRootView`로 감싸져 있어야 동작함 — 단, RN의 `Modal`은 안드로이드에서 별도 네이티브 창으로 뜨기 때문에 최상단 `GestureHandlerRootView`가 그 안까지 커버하지 못함. `Modal`을 쓰는 화면에서 제스처를 쓰려면 `ImageViewerModal.tsx`처럼 `<Modal>` 내부에도 `GestureHandlerRootView`를 하나 더 감싸야 함)
 
 ### 로컬 전용 모드 (로그인/인터넷 없이 폰에만 저장)
 
@@ -25,7 +25,9 @@ Naru는 휴대폰을 열었을 때 오늘 할 일과 기억할 정보를 바로 
 - `src/screens/TodayScreen.tsx`: 로컬 모드에서는 로그아웃 버튼을 숨깁니다.
 - app.json/네이티브 빌드 설정(패키지명, 앱 이름 등 실제로 두 개의 APK를 구분하는 부분)은 이 문서의 범위가 아니며 빌드할 때 별도로 관리합니다.
 
-**"Naru Local" 빌드 방법** (별도 앱으로 폰에 나란히 설치 가능하게): 빌드 직전에만 임시로 `app.json`의 `expo.name`을 `"Naru Local"`, `expo.android.package`를 `"com.naru.app.local"`로, `android/app/build.gradle`의 `applicationId`를 `com.naru.app.local`로 바꾸고, `.env`에 `EXPO_PUBLIC_STORAGE_MODE=local`을 추가한 뒤 릴리즈 빌드 → 빌드 끝나면 세 파일(app.json, build.gradle, .env)을 전부 클라우드 기본값으로 되돌립니다(레포에 커밋되는 상태는 항상 클라우드 앱을 가리켜야 함). `namespace`(`com.naru.app`, Kotlin 패키지 선언과 일치)는 건드리지 않습니다 — `applicationId`만 다르게 하는 건 안드로이드에서 흔한 방식입니다.
+**"Naru Local" 빌드 방법** (별도 앱으로 폰에 나란히 설치 가능하게): 빌드 직전에만 임시로 `app.json`의 `expo.name`을 `"Naru Local"`, `expo.android.package`를 `"com.naru.app.local"`, `expo.icon`을 `"./assets/icon-local.png"`, `expo.android.adaptiveIcon.foregroundImage`를 `"./assets/android-icon-foreground-local.png"`로, `android/app/build.gradle`의 `applicationId`를 `com.naru.app.local`로 바꾸고, `.env`에 `EXPO_PUBLIC_STORAGE_MODE=local`을 추가한 뒤 릴리즈 빌드 → 빌드 끝나면 네 파일(app.json, build.gradle, .env, mipmap 아이콘)을 전부 클라우드 기본값으로 되돌립니다(레포에 커밋되는 상태는 항상 클라우드 앱을 가리켜야 함). `namespace`(`com.naru.app`, Kotlin 패키지 선언과 일치)는 건드리지 않습니다 — `applicationId`만 다르게 하는 건 안드로이드에서 흔한 방식입니다.
+
+이 프로젝트는 `android/`가 저장소에 커밋된 bare 워크플로우라(`expo prebuild` 안 씀 — 커스텀 네이티브 위젯 코드가 날아갈 위험이 있어서), `app.json`의 아이콘 경로를 바꿔도 실제 런처 아이콘엔 반영되지 않습니다. 오렌지색 "LOCAL" 리본이 찍힌 `assets/icon-local.png`/`assets/android-icon-foreground-local.png`(원본 아이콘에 리본을 합성한 것, 재생성 스크립트는 커밋 안 함 — 필요하면 PIL로 다시 만들면 됨)를 108/162/216/324/432px로 리사이즈해 `android/app/src/main/res/mipmap-{m,h,xh,xxh,xxxh}dpi/ic_launcher_foreground.webp`에 직접 덮어써야 반영됩니다. 빌드 후에는 `git checkout -- android/app/src/main/res/mipmap-*dpi/ic_launcher_foreground.webp`로 원복. (legacy `ic_launcher.webp`/`ic_launcher_round.webp`는 안 건드림 — API 26+ adaptive icon만 리본이 보이고, 구버전 안드로이드에서는 기존 아이콘 그대로 보임.)
 
 **웹 다운로드 링크(`src/screens/LoginScreen.tsx`)**: 로그인 화면 상단에 "앱 다운로드"(클라우드, `naru-v{app.json 버전}.apk`)와 "로컬앱 다운로드"(`naru-local-v{LOCAL_APP_VERSION}.apk`, `LOCAL_APP_VERSION`은 파일 상단에 하드코딩된 상수 — 로컬 버전을 새로 빌드할 때마다 이 값도 같이 올려야 함) 두 버튼이 나란히 있습니다. 둘 다 같은 GitHub 릴리즈(`v1.0.0` 태그)에 자산으로 업로드.
 
