@@ -130,6 +130,13 @@ android {
     androidResources {
         ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:!CVS:!thumbs.db:!picasa.ini:!*~'
     }
+    // 빌드마다 파일명에 버전이 남도록(예: naru-v1.0.1.apk) — 어떤 APK가 최신인지
+    // 파일명만 보고도 구분할 수 있게 한다.
+    applicationVariants.all { variant ->
+        variant.outputs.all { output ->
+            outputFileName = "naru-v${variant.versionName}.apk"
+        }
+    }
 }
 
 // Apply static values from `gradle.properties` to the `android.packagingOptions`

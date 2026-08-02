@@ -25,8 +25,10 @@ import { getPendingTodoCompletions } from '../native/ReviewWidget';
 import type { TabParamList } from '../navigation/TabNavigator';
 import appJson from '../../app.json';
 
-const APK_DOWNLOAD_URL = 'https://github.com/eduicms7-cyber/naru/releases/latest/download/app-release.apk';
 const APP_VERSION = appJson.expo.version;
+// 안드로이드 릴리즈 APK 파일명(android/app/build.gradle의 outputFileName)에 버전이
+// 들어가므로, 새 버전을 빌드/배포할 때마다 이 URL도 같이 올려줘야 한다.
+const APK_DOWNLOAD_URL = `https://github.com/eduicms7-cyber/naru/releases/latest/download/naru-v${APP_VERSION}.apk`;
 
 function formatTodayLabel(): string {
   const days = ['일', '월', '화', '수', '목', '금', '토'];
