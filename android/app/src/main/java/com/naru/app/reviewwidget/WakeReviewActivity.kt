@@ -90,7 +90,7 @@ class WakeReviewActivity : Activity() {
 
     val content = LinearLayout(this).apply {
       orientation = LinearLayout.VERTICAL
-      gravity = Gravity.CENTER
+      gravity = Gravity.CENTER_HORIZONTAL
       setPadding(dp(28), dp(28), dp(28), dp(28))
     }
 
@@ -113,9 +113,11 @@ class WakeReviewActivity : Activity() {
     }
     memos.forEach { memo -> newFlipper.addView(buildSlide(memo)) }
     flipper = newFlipper
+    // 고정 높이(320dp) 대신 위/아래 헤더·점·버튼을 뺀 나머지 공간을 카드가 다 채우도록 weight로 늘림 —
+    // 화면 위아래에 빈 공간이 크게 남던 문제 수정.
     content.addView(
       newFlipper,
-      LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(320))
+      LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f)
     )
 
     val newDots = LinearLayout(this).apply {
@@ -174,9 +176,7 @@ class WakeReviewActivity : Activity() {
 
     root.addView(
       content,
-      FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT).apply {
-        gravity = Gravity.CENTER
-      }
+      FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
     )
 
     updateActionRowVisibility()
