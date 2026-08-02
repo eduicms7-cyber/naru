@@ -35,7 +35,7 @@ export async function requestReviewPermission(): Promise<boolean> {
 }
 
 export function setDueMemos(
-  memos: { id: string; text: string; color?: string; imageUri?: string }[]
+  memos: { id: string; text: string; color?: string; imageUris?: string[] }[]
 ): void {
   if (Platform.OS === 'android' && nativeModule) {
     nativeModule.setDueMemos(JSON.stringify(memos));

@@ -378,7 +378,7 @@ class WakeReviewActivity : Activity() {
       setPadding(dp(20), dp(20), dp(20), dp(20))
     }
 
-    if (memo.imageUri != null) {
+    if (memo.imageUris.size == 1) {
       val imageView = ImageView(this).apply {
         scaleType = ImageView.ScaleType.FIT_CENTER
         background = roundedDrawable("#00000000", dp(10))
@@ -387,11 +387,45 @@ class WakeReviewActivity : Activity() {
       column.addView(imageView, LinearLayout.LayoutParams(
         LinearLayout.LayoutParams.MATCH_PARENT, dp(180)
       ).apply { bottomMargin = dp(14) })
-      loadImageInto(imageView, memo.imageUri)
+      loadImageInto(imageView, memo.imageUris[0])
+    } else if (memo.imageUris.size > 1) {
+      // 여러 장이면 균등한 폭으로 나란히 보여준다(가로 스크롤은 일부러 안 씀 — 카드
+      // 자체가 좌우 스와이프로 넘어가는 영역이라, 그 안에 또 가로 스크롤을 두면
+      // 두 제스처가 서로 충돌한다). 4장을 넘으면 마지막 칸에 "+N"으로 나머지 개수 표시.
+      val maxVisible = 4
+      val visibleUris = memo.imageUris.take(maxVisible)
+      val extraCount = memo.imageUris.size - visibleUris.size
+      val thumbRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+      visibleUris.forEachIndexed { index, uri ->
+        val thumb = ImageView(this).apply {
+          scaleType = ImageView.ScaleType.CENTER_CROP
+          background = roundedDrawable("#00000000", dp(10))
+          clipToOutline = true
+        }
+        val cell = FrameLayout(this).apply {
+          addView(thumb, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+          if (index == visibleUris.lastIndex && extraCount > 0) {
+            addView(TextView(this@WakeReviewActivity).apply {
+              text = "+$extraCount"
+              setTextColor(Color.WHITE)
+              textSize = 16f
+              gravity = Gravity.CENTER
+              setBackgroundColor(Color.parseColor("#99000000"))
+            }, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+          }
+        }
+        val params = LinearLayout.LayoutParams(0, dp(90), 1f)
+        if (index > 0) params.marginStart = dp(8)
+        thumbRow.addView(cell, params)
+        loadImageInto(thumb, uri)
+      }
+      column.addView(thumbRow, LinearLayout.LayoutParams(
+        LinearLayout.LayoutParams.MATCH_PARENT, dp(90)
+      ).apply { bottomMargin = dp(14) })
     }
 
     val text = TextView(this).apply {
-      text = memo.text.ifEmpty { if (memo.imageUri != null) "" else "이미지 메모" }
+      text = memo.text.ifEmpty { if (memo.imageUris.isNotEmpty()) "" else "이미지 메모" }
       setTextColor(if (memo.color != null) Color.parseColor("#1C1C1E") else Color.WHITE)
       textSize = 20f
       gravity = Gravity.START

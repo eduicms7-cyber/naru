@@ -137,7 +137,7 @@ export default function KnowledgeVaultScreen() {
       id: m.id,
       text: memoSummaryText(m),
       color: m.color,
-      imageUri: m.imageUris?.[0],
+      imageUris: m.imageUris,
     }));
     setDueMemos(dueForNative);
     if (dueMemos.length === 0) {
