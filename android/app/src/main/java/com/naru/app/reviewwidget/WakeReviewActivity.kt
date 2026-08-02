@@ -4,14 +4,17 @@ import android.app.Activity
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Color
+import android.graphics.Matrix
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.Bundle
 import android.view.Gravity
 import android.view.MotionEvent
+import android.view.ScaleGestureDetector
 import android.view.View
 import android.view.ViewConfiguration
 import android.view.ViewGroup
+import android.view.WindowInsets
 import android.view.WindowManager
 import android.view.animation.AnimationUtils
 import android.widget.Button
@@ -26,6 +29,7 @@ import com.naru.app.R
 import java.net.HttpURLConnection
 import java.net.URL
 import kotlin.math.abs
+import kotlin.math.min
 
 // 잠금화면 위에서 오늘 할 일 카드 + 오늘 복습할 카드를 슬라이드로 보여주는 "기억의 궁전" 풀스크린 액티비티.
 // WakeMonitorService가 ACTION_SCREEN_ON을 감지했을 때 띄운다.
@@ -49,6 +53,8 @@ class WakeReviewActivity : Activity() {
   private var completeButton: Button? = null
   private var skipButton: Button? = null
   private lateinit var root: FrameLayout
+  private var imageOverlay: FrameLayout? = null
+  private var zoomImageView: ZoomableImageView? = null
   private var memos: MutableList<DueMemo> = mutableListOf()
   private var todos: MutableList<WakeTodo> = mutableListOf()
   // 할일이 있으면 플리퍼의 0번 슬라이드가 할일 카드이므로, memos 인덱스는 이 오프셋만큼 밀린다.
@@ -62,8 +68,11 @@ class WakeReviewActivity : Activity() {
   // 이 액티비티가 뜨는 시점엔 아직 초기화됐다는 보장이 없어서(화면 켜짐이 앱 실행보다
   // 먼저일 수 있음) 의존하지 않고, 표준 API로 직접 처리 + 화면 폭 기준으로 다운샘플링.
   private fun loadImageInto(imageView: ImageView, url: String) {
+    // 앱 안에서 이미지를 눌러 확대해 보는 것과 똑같이, 잠금화면 카드의 썸네일도
+    // 탭하면 전체화면으로 핀치줌해서 볼 수 있게 한다.
     imageCache[url]?.let {
       imageView.setImageBitmap(it)
+      imageView.setOnClickListener { _ -> showImageOverlay(it) }
       return
     }
     Thread {
@@ -84,7 +93,10 @@ class WakeReviewActivity : Activity() {
         if (bitmap != null) {
           imageCache[url] = bitmap
           runOnUiThread {
-            if (!isFinishing) imageView.setImageBitmap(bitmap)
+            if (!isFinishing) {
+              imageView.setImageBitmap(bitmap)
+              imageView.setOnClickListener { _ -> showImageOverlay(bitmap) }
+            }
           }
         }
       } catch (e: Exception) {
@@ -108,6 +120,16 @@ class WakeReviewActivity : Activity() {
     memoOffset = if (todos.isNotEmpty()) 1 else 0
 
     setContentView(buildRootView())
+  }
+
+  @Deprecated("Deprecated in Java")
+  @Suppress("DEPRECATION")
+  override fun onBackPressed() {
+    if (imageOverlay?.visibility == View.VISIBLE) {
+      hideImageOverlay()
+      return
+    }
+    super.onBackPressed()
   }
 
   override fun onDestroy() {
@@ -250,9 +272,60 @@ class WakeReviewActivity : Activity() {
       FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
     )
 
+    // 삼성 갤럭시 등 제스처/플로팅 내비게이션 바가 화면 아래를 차지하면서 버튼을 가리던 문제 —
+    // 시스템이 알려주는 네비게이션 바 높이만큼 아래쪽 여백을 추가로 확보한다.
+    val basePadding = dp(28)
+    root.setOnApplyWindowInsetsListener { _, insets ->
+      val navBarBottom = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        insets.getInsets(WindowInsets.Type.navigationBars()).bottom
+      } else {
+        @Suppress("DEPRECATION")
+        insets.systemWindowInsetBottom
+      }
+      content.setPadding(basePadding, basePadding, basePadding, basePadding + navBarBottom)
+      insets
+    }
+
+    buildImageOverlay()
+
     updateActionRowVisibility()
 
     return root
+  }
+
+  // 카드 썸네일을 탭하면 핀치줌/드래그로 확대해서 볼 수 있는 전체화면 오버레이.
+  // 앱 안에서 이미지 탭하면 확대되는 것과 동일한 경험을 잠금화면에서도 제공한다.
+  private fun buildImageOverlay() {
+    val zoomView = ZoomableImageView(this)
+    zoomImageView = zoomView
+
+    val closeButton = TextView(this).apply {
+      text = "✕"
+      setTextColor(Color.WHITE)
+      textSize = 22f
+      setPadding(dp(16), dp(16), dp(16), dp(16))
+      setOnClickListener { hideImageOverlay() }
+    }
+
+    val overlay = FrameLayout(this).apply {
+      setBackgroundColor(Color.parseColor("#EE000000"))
+      visibility = View.GONE
+      addView(zoomView, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+      addView(closeButton, FrameLayout.LayoutParams(
+        FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT
+      ).apply { gravity = Gravity.TOP or Gravity.END; topMargin = dp(20); marginEnd = dp(12) })
+    }
+    imageOverlay = overlay
+    root.addView(overlay, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+  }
+
+  private fun showImageOverlay(bitmap: Bitmap) {
+    zoomImageView?.setImageBitmap(bitmap)
+    imageOverlay?.visibility = View.VISIBLE
+  }
+
+  private fun hideImageOverlay() {
+    imageOverlay?.visibility = View.GONE
   }
 
   // 할일 카드: 복습 카드와 같은 슬라이드 자리지만, 스크롤 가능한 체크리스트가 들어간다.
@@ -481,5 +554,121 @@ private class SwipeAxisFrameLayout(
       }
     }
     return true
+  }
+}
+
+// 앱 안 이미지 뷰어(ImageViewerModal)의 핀치줌/드래그를 잠금화면에서도 그대로 쓸 수 있도록
+// 만든 최소 구현 — Matrix로 직접 스케일/이동을 그린다(외부 이미지 라이브러리 의존 없음).
+private class ZoomableImageView(context: android.content.Context) : ImageView(context) {
+  private val baseMatrix = Matrix()
+  private val drawMatrix = Matrix()
+  private var scale = 1f
+  private val minScale = 1f
+  private val maxScale = 5f
+  private var lastX = 0f
+  private var lastY = 0f
+  private var activePointerId = -1
+  private var isDragging = false
+
+  private val scaleDetector = ScaleGestureDetector(context, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
+    override fun onScale(detector: ScaleGestureDetector): Boolean {
+      val prevScale = scale
+      scale = (scale * detector.scaleFactor).coerceIn(minScale, maxScale)
+      val factor = scale / prevScale
+      drawMatrix.postScale(factor, factor, detector.focusX, detector.focusY)
+      imageMatrix = drawMatrix
+      return true
+    }
+  })
+
+  private val doubleTapDetector = DoubleTapResetDetector(context) { resetZoom() }
+
+  init {
+    scaleType = ScaleType.MATRIX
+  }
+
+  private fun resetZoom() {
+    scale = 1f
+    val d = drawable ?: return
+    val vw = width.toFloat()
+    val vh = height.toFloat()
+    val dw = d.intrinsicWidth.toFloat()
+    val dh = d.intrinsicHeight.toFloat()
+    if (vw <= 0 || vh <= 0 || dw <= 0 || dh <= 0) return
+    val s = min(vw / dw, vh / dh)
+    baseMatrix.reset()
+    baseMatrix.postScale(s, s)
+    baseMatrix.postTranslate((vw - dw * s) / 2f, (vh - dh * s) / 2f)
+    drawMatrix.set(baseMatrix)
+    imageMatrix = drawMatrix
+  }
+
+  override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+    super.onSizeChanged(w, h, oldw, oldh)
+    resetZoom()
+  }
+
+  override fun setImageBitmap(bm: Bitmap?) {
+    super.setImageBitmap(bm)
+    post { resetZoom() }
+  }
+
+  override fun onTouchEvent(event: MotionEvent): Boolean {
+    scaleDetector.onTouchEvent(event)
+    doubleTapDetector.onTouchEvent(event)
+    when (event.actionMasked) {
+      MotionEvent.ACTION_DOWN -> {
+        lastX = event.x
+        lastY = event.y
+        activePointerId = event.getPointerId(0)
+        isDragging = true
+      }
+      MotionEvent.ACTION_MOVE -> {
+        if (isDragging && !scaleDetector.isInProgress && event.pointerCount == 1) {
+          val idx = event.findPointerIndex(activePointerId)
+          if (idx >= 0) {
+            val dx = event.getX(idx) - lastX
+            val dy = event.getY(idx) - lastY
+            drawMatrix.postTranslate(dx, dy)
+            imageMatrix = drawMatrix
+            lastX = event.getX(idx)
+            lastY = event.getY(idx)
+          }
+        }
+      }
+      MotionEvent.ACTION_POINTER_UP -> {
+        val idx = event.actionIndex
+        if (event.getPointerId(idx) == activePointerId) {
+          val newIdx = if (idx == 0) 1 else 0
+          if (newIdx < event.pointerCount) {
+            lastX = event.getX(newIdx)
+            lastY = event.getY(newIdx)
+            activePointerId = event.getPointerId(newIdx)
+          }
+        }
+      }
+      MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+        isDragging = false
+        activePointerId = -1
+      }
+    }
+    return true
+  }
+}
+
+// GestureDetector 하나로 더블탭만 감지하는 아주 얇은 래퍼(줌 초기화용).
+private class DoubleTapResetDetector(
+  context: android.content.Context,
+  onDoubleTap: () -> Unit
+) {
+  private val detector = android.view.GestureDetector(context, object : android.view.GestureDetector.SimpleOnGestureListener() {
+    override fun onDoubleTap(e: MotionEvent): Boolean {
+      onDoubleTap()
+      return true
+    }
+  })
+
+  fun onTouchEvent(event: MotionEvent) {
+    detector.onTouchEvent(event)
   }
 }
