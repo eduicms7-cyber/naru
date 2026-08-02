@@ -37,9 +37,18 @@ export interface ScheduleEvent {
   createdAt: number;
 }
 
+export interface Favorite {
+  id: string;
+  title: string;
+  url: string;
+  order: number;
+  createdAt: number;
+}
+
 // Values double as Supabase table names (src/storage/storage.ts).
 export const STORAGE_KEYS = {
   TODOS: 'todos',
   MEMOS: 'memos',
   SCHEDULES: 'schedules',
+  FAVORITES: 'favorites',
 } as const;

@@ -53,9 +53,19 @@ create table if not exists schedules (
   created_at bigint not null
 );
 
+create table if not exists favorites (
+  id text primary key,
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  title text not null,
+  url text not null,
+  position int not null default 0,
+  created_at bigint not null
+);
+
 alter table todos enable row level security;
 alter table memos enable row level security;
 alter table schedules enable row level security;
+alter table favorites enable row level security;
 
 create policy "todos_owner_all" on todos
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
@@ -64,6 +74,9 @@ create policy "memos_owner_all" on memos
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
 create policy "schedules_owner_all" on schedules
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+create policy "favorites_owner_all" on favorites
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
 -- Storage bucket for memo images (public read so <Image> can load the URL directly,

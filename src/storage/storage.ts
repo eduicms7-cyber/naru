@@ -3,7 +3,7 @@ import { Platform } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import { decode } from 'base64-arraybuffer';
 import { supabase } from '../lib/supabase';
-import { Memo, ScheduleEvent, STORAGE_KEYS, Todo } from '../types';
+import { Favorite, Memo, ScheduleEvent, STORAGE_KEYS, Todo } from '../types';
 
 type TableName = (typeof STORAGE_KEYS)[keyof typeof STORAGE_KEYS];
 
@@ -91,6 +91,27 @@ function scheduleToRow(item: ScheduleEvent, userId: string) {
   return { id: item.id, user_id: userId, date: item.date, title: item.title, created_at: item.createdAt };
 }
 
+function rowToFavorite(row: any): Favorite {
+  return {
+    id: row.id,
+    title: row.title,
+    url: row.url,
+    order: row.position,
+    createdAt: row.created_at,
+  };
+}
+
+function favoriteToRow(item: Favorite, userId: string) {
+  return {
+    id: item.id,
+    user_id: userId,
+    title: item.title,
+    url: item.url,
+    position: item.order,
+    created_at: item.createdAt,
+  };
+}
+
 function rowsToItems<T>(table: TableName, rows: any[]): T[] {
   switch (table) {
     case STORAGE_KEYS.TODOS:
@@ -99,6 +120,8 @@ function rowsToItems<T>(table: TableName, rows: any[]): T[] {
       return rows.map(rowToMemo) as unknown as T[];
     case STORAGE_KEYS.SCHEDULES:
       return rows.map(rowToSchedule) as unknown as T[];
+    case STORAGE_KEYS.FAVORITES:
+      return rows.map(rowToFavorite) as unknown as T[];
     default:
       return [];
   }
@@ -162,6 +185,8 @@ async function buildRow<T>(table: TableName, item: T, userId: string): Promise<a
       return todoToRow(item as unknown as Todo, userId);
     case STORAGE_KEYS.SCHEDULES:
       return scheduleToRow(item as unknown as ScheduleEvent, userId);
+    case STORAGE_KEYS.FAVORITES:
+      return favoriteToRow(item as unknown as Favorite, userId);
     case STORAGE_KEYS.MEMOS: {
       const memoItem = item as unknown as Memo;
       const imageUris = await ensureUploadedImages(memoItem.imageUris, userId);

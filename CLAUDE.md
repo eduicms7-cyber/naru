@@ -37,13 +37,14 @@ npm run web
 App.tsx                     # 앱 엔트리, NavigationContainer 구성
 src/
   navigation/
-    TabNavigator.tsx         # 하단 탭 3개 (오늘 / 지식창고 / 캘린더) 구성
+    TabNavigator.tsx         # 하단 탭 4개 (오늘 / 지식창고 / 캘린더 / 즐겨찾기) 구성
   screens/
     LoginScreen.tsx            # 이메일/비밀번호 로그인·회원가입
     TodayScreen.tsx           # 오늘 탭: 할일 추가/완료체크/삭제
     KnowledgeVaultScreen.tsx   # 지식창고 탭: 태그·고정·색상이 있는 카드 작성/조회/삭제, 기억의 궁전 실행
     MemoryPalaceScreen.tsx     # 기억의 궁전: 오늘 복습할 카드를 플래시카드 슬라이드로 보여주는 모달(앱 내 실행용)
     CalendarScreen.tsx         # 캘린더 탭: 일정 등록/조회 + 할일(작성일, 완료 시 완료일로 이동)·지식창고 카드(작성일)를 날짜별로 함께 보여주고 탭하면 해당 탭으로 이동
+    FavoritesScreen.tsx        # 즐겨찾기 탭: 자주 가는 링크(제목+URL) 등록/삭제, 탭하면 브라우저로 열기, 화살표 버튼으로 순서 변경
   auth/
     AuthContext.tsx            # 세션 상태 + signIn/signUp/signOut
   components/
@@ -56,7 +57,7 @@ src/
     storage.ts                  # Supabase 공용 헬퍼 (loadItems / createItem / updateItem / deleteItem, 테이블별 snake_case 매핑, 개별 실패 op 재시도 큐)
     migrateLegacyData.ts        # 옛 AsyncStorage 데이터를 최초 로그인 시 1회 업로드
   types/
-    index.ts                   # Todo, Memo, ChecklistItem, ScheduleEvent 타입 + STORAGE_KEYS(테이블명)
+    index.ts                   # Todo, Memo, ChecklistItem, ScheduleEvent, Favorite 타입 + STORAGE_KEYS(테이블명)
   theme/
     colors.ts                  # 공용 색상 팔레트 + 지식창고 카드 색 프리셋(cardColors)
   utils/
@@ -72,6 +73,7 @@ supabase/
 - `Todo { id, title, done, createdAt, completedAt?, tags? }` — 테이블: `todos`. `completedAt`은 `done`을 켤 때 채워지고 끄면 지워집니다.
 - `Memo { id, text, imageUri?, createdAt, reviewStage, nextReviewAt, lastReviewedAt?, isPinned?, tags?, color?, noteType?, checklistItems? }` — 지식창고 카드. 테이블: `memos` (테이블/컬럼명은 마이그레이션 부담 때문에 그대로 유지, 화면·UI 용어만 "지식창고"). `isPinned`은 목록 상단 고정(구글킵 스타일, 별 아이콘)용이며 복습 간격에는 영향을 주지 않습니다. `tags`는 자유 라벨, `color`는 `cardColors` 프리셋 중 하나. `noteType`이 `'checklist'`면 `text`는 선택적 제목으로, `checklistItems: { id, text, done }[]`가 본문으로 쓰입니다(없으면 `'text'`로 취급하고 `text`에 `**굵게**`/`_기울임_`/`~~취소선~~`/`# 헤딩` 마크업을 쓸 수 있음 — `src/utils/richText.ts` 파싱, `src/components/MemoBody.tsx`가 렌더링).
 - `ScheduleEvent { id, date(YYYY-MM-DD), title, createdAt }` — 테이블: `schedules`
+- `Favorite { id, title, url, order, createdAt }` — 즐겨찾기 링크. 테이블: `favorites` (`order` 필드는 DB 컬럼 `position`에 매핑 — `order`가 SQL 예약어라 컬럼명은 다르게 둠). `order`가 작을수록 목록 위쪽에 표시되며, 화살표 버튼으로 순서를 바꿀 때는 인접한 두 항목의 `order` 값을 서로 맞바꿔 각각 개별 `updateItem`으로 저장합니다.
 
 ## 기억의 궁전 (잠금화면 복습 위젯)
 
