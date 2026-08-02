@@ -1,25 +1,31 @@
 package com.naru.app.reviewwidget
 
 import android.app.Activity
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.Bundle
-import android.view.GestureDetector
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewConfiguration
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.view.animation.AnimationUtils
 import android.widget.Button
 import android.widget.FrameLayout
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.ViewFlipper
 import androidx.core.app.NotificationManagerCompat
 import com.naru.app.R
+import java.net.HttpURLConnection
+import java.net.URL
+import kotlin.math.abs
 
 // 잠금화면 위에서 오늘 할 일 카드 + 오늘 복습할 카드를 슬라이드로 보여주는 "기억의 궁전" 풀스크린 액티비티.
 // WakeMonitorService가 ACTION_SCREEN_ON을 감지했을 때 띄운다.
@@ -28,6 +34,14 @@ class WakeReviewActivity : Activity() {
   companion object {
     @Volatile
     var isShowing: Boolean = false
+
+    // 화면이 켜질 때마다(하루 여러 번) 매번 재다운로드하지 않도록 프로세스가 살아있는 동안만
+    // 쓰는 아주 단순한 메모리 캐시. 앱 프로세스가 죽으면 자연히 비워진다.
+    private val imageCache = object : LinkedHashMap<String, Bitmap>(16, 0.75f, true) {
+      override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Bitmap>?): Boolean {
+        return size > 12
+      }
+    }
   }
 
   private var flipper: ViewFlipper? = null
@@ -44,6 +58,41 @@ class WakeReviewActivity : Activity() {
 
   private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
+  // 카드 이미지를 백그라운드 스레드에서 내려받아 디코드한다. RN의 이미지 로더(Fresco)는
+  // 이 액티비티가 뜨는 시점엔 아직 초기화됐다는 보장이 없어서(화면 켜짐이 앱 실행보다
+  // 먼저일 수 있음) 의존하지 않고, 표준 API로 직접 처리 + 화면 폭 기준으로 다운샘플링.
+  private fun loadImageInto(imageView: ImageView, url: String) {
+    imageCache[url]?.let {
+      imageView.setImageBitmap(it)
+      return
+    }
+    Thread {
+      try {
+        val connection = (URL(url).openConnection() as HttpURLConnection).apply {
+          connectTimeout = 8000
+          readTimeout = 8000
+        }
+        val bytes = connection.inputStream.use { it.readBytes() }
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+        val targetWidth = resources.displayMetrics.widthPixels
+        var sampleSize = 1
+        while (bounds.outWidth / (sampleSize * 2) >= targetWidth) sampleSize *= 2
+        val bitmap = BitmapFactory.decodeByteArray(
+          bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = sampleSize }
+        )
+        if (bitmap != null) {
+          imageCache[url] = bitmap
+          runOnUiThread {
+            if (!isFinishing) imageView.setImageBitmap(bitmap)
+          }
+        }
+      } catch (e: Exception) {
+        // 실패하면 조용히 텍스트만 있는 카드로 남긴다.
+      }
+    }.start()
+  }
+
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
     isShowing = true
@@ -59,7 +108,6 @@ class WakeReviewActivity : Activity() {
     memoOffset = if (todos.isNotEmpty()) 1 else 0
 
     setContentView(buildRootView())
-    attachSwipeGesture()
   }
 
   override fun onDestroy() {
@@ -113,10 +161,23 @@ class WakeReviewActivity : Activity() {
     }
     memos.forEach { memo -> newFlipper.addView(buildSlide(memo)) }
     flipper = newFlipper
+
+    // 카드 안에 세로 스크롤(ScrollView)이 생기면서, 카드 위에서 시작한 좌우 스와이프를
+    // 그 ScrollView가 세로 제스처로 가로채 다음 카드로 안 넘어가는 문제가 있었다.
+    // 이 래퍼가 손가락 이동이 "가로가 더 큰지"를 먼저 판단해서, 가로 제스처면 자식(ScrollView)
+    // 보다 먼저 가로채 카드 전환에 쓰고, 세로 제스처면 그대로 통과시켜 스크롤이 되게 한다.
+    val swipeWrapper = SwipeAxisFrameLayout(this) { deltaX ->
+      if (Math.abs(deltaX) >= dp(50)) {
+        if (deltaX < 0) showIndex(currentIndex + 1, true) else showIndex(currentIndex - 1, false)
+      }
+    }
+    swipeWrapper.addView(newFlipper, FrameLayout.LayoutParams(
+      FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT
+    ))
     // 고정 높이(320dp) 대신 위/아래 헤더·점·버튼을 뺀 나머지 공간을 카드가 다 채우도록 weight로 늘림 —
     // 화면 위아래에 빈 공간이 크게 남던 문제 수정.
     content.addView(
-      newFlipper,
+      swipeWrapper,
       LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f)
     )
 
@@ -130,48 +191,58 @@ class WakeReviewActivity : Activity() {
     ).apply { topMargin = dp(20) })
     renderDots()
 
+    // 버튼 3개가 폭이 좁은 화면에서 다 안 보이던 문제: WRAP_CONTENT + 넉넉한 패딩으로
+    // 각자 필요한 만큼 차지하다 보니 화면 폭을 넘어갔음. weight로 3등분해서 화면 폭
+    // 안에서 항상 다 보이도록 하고, minWidth 테마 기본값(보통 88dp)도 제거한다.
     val actionRow = LinearLayout(this).apply {
       orientation = LinearLayout.HORIZONTAL
-      gravity = Gravity.CENTER
+    }
+
+    fun actionButtonParams() = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+      marginStart = dp(6)
+      marginEnd = dp(6)
     }
 
     val newSkipButton = Button(this).apply {
       text = "다시보기"
+      textSize = 13f
       setTextColor(Color.parseColor("#8E8E93"))
       background = roundedDrawable("#2C2C2E", dp(10))
-      setPadding(dp(24), dp(14), dp(24), dp(14))
+      setPadding(dp(8), dp(14), dp(8), dp(14))
+      minWidth = 0
+      minimumWidth = 0
       setOnClickListener { skipCurrent() }
     }
     skipButton = newSkipButton
-    actionRow.addView(newSkipButton, LinearLayout.LayoutParams(
-      LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
-    ).apply { marginEnd = dp(12) })
+    actionRow.addView(newSkipButton, actionButtonParams())
 
     val newCompleteButton = Button(this).apply {
       text = "기억완료"
+      textSize = 13f
       setTextColor(Color.WHITE)
       background = roundedDrawable("#5B8DEF", dp(10))
-      setPadding(dp(28), dp(14), dp(28), dp(14))
+      setPadding(dp(8), dp(14), dp(8), dp(14))
+      minWidth = 0
+      minimumWidth = 0
       setOnClickListener { completeCurrent() }
     }
     completeButton = newCompleteButton
-    actionRow.addView(newCompleteButton, LinearLayout.LayoutParams(
-      LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
-    ).apply { marginEnd = dp(12) })
+    actionRow.addView(newCompleteButton, actionButtonParams())
 
     val finishButton = Button(this).apply {
       text = "마치기"
+      textSize = 13f
       setTextColor(Color.parseColor("#8E8E93"))
       background = roundedDrawable("#2C2C2E", dp(10))
-      setPadding(dp(28), dp(14), dp(28), dp(14))
+      setPadding(dp(8), dp(14), dp(8), dp(14))
+      minWidth = 0
+      minimumWidth = 0
       setOnClickListener { finish() }
     }
-    actionRow.addView(finishButton, LinearLayout.LayoutParams(
-      LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
-    ))
+    actionRow.addView(finishButton, actionButtonParams())
 
     content.addView(actionRow, LinearLayout.LayoutParams(
-      LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
+      LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
     ).apply { topMargin = dp(36) })
 
     root.addView(
@@ -229,15 +300,35 @@ class WakeReviewActivity : Activity() {
   // 있어야 한다. ScrollView + isFillViewport로 감싸서, 내용이 짧을 땐 기존처럼
   // 세로 가운데 정렬되고 길 땐 위에서부터 스크롤되도록 한다.
   private fun buildSlide(memo: DueMemo): View {
-    val text = TextView(this).apply {
-      text = memo.text.ifEmpty { "이미지 메모" }
-      setTextColor(if (memo.color != null) Color.parseColor("#1C1C1E") else Color.WHITE)
-      textSize = 20f
-      gravity = Gravity.CENTER_VERTICAL or Gravity.START
+    val column = LinearLayout(this).apply {
+      orientation = LinearLayout.VERTICAL
       setPadding(dp(20), dp(20), dp(20), dp(20))
     }
+
+    if (memo.imageUri != null) {
+      val imageView = ImageView(this).apply {
+        scaleType = ImageView.ScaleType.FIT_CENTER
+        background = roundedDrawable("#00000000", dp(10))
+        clipToOutline = true
+      }
+      column.addView(imageView, LinearLayout.LayoutParams(
+        LinearLayout.LayoutParams.MATCH_PARENT, dp(180)
+      ).apply { bottomMargin = dp(14) })
+      loadImageInto(imageView, memo.imageUri)
+    }
+
+    val text = TextView(this).apply {
+      text = memo.text.ifEmpty { if (memo.imageUri != null) "" else "이미지 메모" }
+      setTextColor(if (memo.color != null) Color.parseColor("#1C1C1E") else Color.WHITE)
+      textSize = 20f
+      gravity = Gravity.START
+    }
+    column.addView(text, LinearLayout.LayoutParams(
+      LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+    ))
+
     val inner = FrameLayout(this).apply {
-      addView(text, FrameLayout.LayoutParams(
+      addView(column, FrameLayout.LayoutParams(
         FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT
       ).apply { gravity = Gravity.CENTER_VERTICAL })
     }
@@ -347,28 +438,48 @@ class WakeReviewActivity : Activity() {
     updateActionRowVisibility()
   }
 
-  private fun attachSwipeGesture() {
-    val detector = GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
-      override fun onFling(
-        e1: MotionEvent?,
-        e2: MotionEvent,
-        velocityX: Float,
-        velocityY: Float
-      ): Boolean {
-        if (e1 == null || totalSlideCount() <= 1) return false
-        val deltaX = e2.x - e1.x
-        if (Math.abs(deltaX) < dp(50)) return false
-        if (deltaX < 0) {
-          showIndex(currentIndex + 1, true)
-        } else {
-          showIndex(currentIndex - 1, false)
-        }
-        return true
+}
+
+// 자식(카드 안 ScrollView)이 세로 스크롤을 위해 터치를 가져가기 전에, 손가락 이동이
+// 세로보다 가로로 더 크면 이 레이아웃이 먼저 가로채서 onSwipe로 넘긴다. 세로 위주
+// 이동이면 그대로 통과시켜서 자식의 스크롤이 정상 동작한다.
+private class SwipeAxisFrameLayout(
+  context: android.content.Context,
+  private val onSwipe: (deltaX: Float) -> Unit
+) : FrameLayout(context) {
+  private var downX = 0f
+  private var downY = 0f
+  private var draggingHorizontally = false
+  private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop
+
+  override fun onInterceptTouchEvent(ev: MotionEvent): Boolean {
+    when (ev.actionMasked) {
+      MotionEvent.ACTION_DOWN -> {
+        downX = ev.x
+        downY = ev.y
+        draggingHorizontally = false
       }
-    })
-    findViewById<View>(android.R.id.content).setOnTouchListener { _, event ->
-      detector.onTouchEvent(event)
-      true
+      MotionEvent.ACTION_MOVE -> {
+        val dx = ev.x - downX
+        val dy = ev.y - downY
+        if (!draggingHorizontally && (abs(dx) > touchSlop) && abs(dx) > abs(dy)) {
+          draggingHorizontally = true
+          return true
+        }
+      }
     }
+    return false
+  }
+
+  override fun onTouchEvent(event: MotionEvent): Boolean {
+    when (event.actionMasked) {
+      MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+        if (draggingHorizontally) {
+          onSwipe(event.x - downX)
+        }
+        draggingHorizontally = false
+      }
+    }
+    return true
   }
 }

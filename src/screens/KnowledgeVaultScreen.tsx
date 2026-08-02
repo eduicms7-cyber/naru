@@ -133,7 +133,12 @@ export default function KnowledgeVaultScreen() {
   const incompleteTodos = useMemo(() => todayTodos.filter((t) => !t.done), [todayTodos]);
 
   useEffect(() => {
-    const dueForNative = dueMemos.map((m) => ({ id: m.id, text: memoSummaryText(m), color: m.color }));
+    const dueForNative = dueMemos.map((m) => ({
+      id: m.id,
+      text: memoSummaryText(m),
+      color: m.color,
+      imageUri: m.imageUris?.[0],
+    }));
     setDueMemos(dueForNative);
     if (dueMemos.length === 0) {
       clearReview();
