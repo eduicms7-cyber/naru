@@ -15,6 +15,7 @@ Naru는 휴대폰을 열었을 때 오늘 할 일과 기억할 정보를 바로 
 - 백엔드/동기화: Supabase (Postgres + Auth + Storage) — 로그인 후 휴대폰/웹이 같은 데이터를 공유합니다. (`src/lib/supabase.ts`, `src/auth/AuthContext.tsx`)
 - 이미지 첨부: `expo-image-picker` (저장 시 Supabase Storage `memo-images` 버킷에 업로드됨)
 - 아이콘: `@expo/vector-icons` (Ionicons)
+- 제스처: `react-native-gesture-handler` (`ImageViewerModal.tsx`의 핀치줌 — 이 프로젝트는 새 아키텍처(Fabric)를 쓰는데, 그 환경에서 `PanResponder`로 직접 만든 멀티터치 핀치가 터치 이벤트 자체를 못 받는 문제가 있어서 교체됨. `App.tsx` 최상단이 `GestureHandlerRootView`로 감싸져 있어야 동작함)
 
 ### 로컬 전용 모드 (로그인/인터넷 없이 폰에만 저장)
 
