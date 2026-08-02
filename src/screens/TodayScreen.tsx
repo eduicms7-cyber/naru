@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   FlatList,
   KeyboardAvoidingView,
-  Linking,
   Modal,
   Platform,
   Pressable,
@@ -29,9 +28,6 @@ import appJson from '../../app.json';
 const IS_LOCAL_MODE = process.env.EXPO_PUBLIC_STORAGE_MODE === 'local';
 
 const APP_VERSION = appJson.expo.version;
-// 안드로이드 릴리즈 APK 파일명(android/app/build.gradle의 outputFileName)에 버전이
-// 들어가므로, 새 버전을 빌드/배포할 때마다 이 URL도 같이 올려줘야 한다.
-const APK_DOWNLOAD_URL = `https://github.com/eduicms7-cyber/naru/releases/latest/download/naru-v${APP_VERSION}.apk`;
 
 function formatTodayLabel(): string {
   const days = ['일', '월', '화', '수', '목', '금', '토'];
@@ -164,24 +160,14 @@ export default function TodayScreen() {
           <Text style={styles.dateLabel}>
             {formatTodayLabel()} · v{APP_VERSION}
           </Text>
-          <View style={styles.headerActions}>
-            {Platform.OS === 'web' && (
-              <Pressable
-                onPress={() => Linking.openURL(APK_DOWNLOAD_URL)}
-                hitSlop={8}
-                style={styles.headerActionButton}
-              >
-                <Ionicons name="download-outline" size={20} color={colors.subtext} />
-                <Text style={styles.headerActionLabel}>앱 다운로드</Text>
-              </Pressable>
-            )}
-            {!IS_LOCAL_MODE && (
+          {!IS_LOCAL_MODE && (
+            <View style={styles.headerActions}>
               <Pressable onPress={signOut} hitSlop={8} style={styles.headerActionButton}>
                 <Ionicons name="log-out-outline" size={20} color={colors.subtext} />
                 <Text style={styles.headerActionLabel}>로그아웃</Text>
               </Pressable>
-            )}
-          </View>
+            </View>
+          )}
         </View>
         <Text style={styles.title}>오늘 할 일</Text>
         {todos.length > 0 && (

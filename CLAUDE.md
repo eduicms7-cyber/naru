@@ -24,6 +24,12 @@ Naru는 휴대폰을 열었을 때 오늘 할 일과 기억할 정보를 바로 
 - `src/screens/TodayScreen.tsx`: 로컬 모드에서는 로그아웃 버튼을 숨깁니다.
 - app.json/네이티브 빌드 설정(패키지명, 앱 이름 등 실제로 두 개의 APK를 구분하는 부분)은 이 문서의 범위가 아니며 빌드할 때 별도로 관리합니다.
 
+**"Naru Local" 빌드 방법** (별도 앱으로 폰에 나란히 설치 가능하게): 빌드 직전에만 임시로 `app.json`의 `expo.name`을 `"Naru Local"`, `expo.android.package`를 `"com.naru.app.local"`로, `android/app/build.gradle`의 `applicationId`를 `com.naru.app.local`로 바꾸고, `.env`에 `EXPO_PUBLIC_STORAGE_MODE=local`을 추가한 뒤 릴리즈 빌드 → 빌드 끝나면 세 파일(app.json, build.gradle, .env)을 전부 클라우드 기본값으로 되돌립니다(레포에 커밋되는 상태는 항상 클라우드 앱을 가리켜야 함). `namespace`(`com.naru.app`, Kotlin 패키지 선언과 일치)는 건드리지 않습니다 — `applicationId`만 다르게 하는 건 안드로이드에서 흔한 방식입니다.
+
+**웹 다운로드 링크(`src/screens/LoginScreen.tsx`)**: 로그인 화면 상단에 "앱 다운로드"(클라우드, `naru-v{app.json 버전}.apk`)와 "로컬앱 다운로드"(`naru-local-v{LOCAL_APP_VERSION}.apk`, `LOCAL_APP_VERSION`은 파일 상단에 하드코딩된 상수 — 로컬 버전을 새로 빌드할 때마다 이 값도 같이 올려야 함) 두 버튼이 나란히 있습니다. 둘 다 같은 GitHub 릴리즈(`v1.0.0` 태그)에 자산으로 업로드.
+
+**중요 — 앱 기능을 수정할 때마다**: 웹/클라우드 앱과 Naru Local 둘 다 같은 화면 코드를 공유하므로, 기능 변경이 있으면 **두 버전 다** 빌드해서 배포해야 합니다(웹 배포는 push 한 번으로 둘 다 자동 반영되지만, APK는 각각 따로 빌드/릴리즈 업로드 필요).
+
 ## 실행 방법
 
 ```

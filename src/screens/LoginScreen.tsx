@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
+  Linking,
   Platform,
   Pressable,
   StyleSheet,
@@ -9,11 +10,24 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../auth/AuthContext';
 import { colors } from '../theme/colors';
 import { showAlert } from '../utils/alert';
+import appJson from '../../app.json';
+
+const APP_VERSION = appJson.expo.version;
+// 안드로이드 릴리즈 APK 파일명(android/app/build.gradle의 outputFileName)에 버전이
+// 들어가므로, 새 버전을 빌드/배포할 때마다 이 URL도 같이 올려줘야 한다.
+const APK_DOWNLOAD_URL = `https://github.com/eduicms7-cyber/naru/releases/latest/download/naru-v${APP_VERSION}.apk`;
+// 로컬 전용("Naru Local") 버전은 별도 앱(패키지)이라 app.json의 버전과 무관하게
+// 독립적으로 관리된다 — 새로 빌드/배포할 때마다 이 버전 문자열을 직접 올려줘야 한다.
+const LOCAL_APP_VERSION = '1.0.0';
+const LOCAL_APK_DOWNLOAD_URL = `https://github.com/eduicms7-cyber/naru/releases/latest/download/naru-local-v${LOCAL_APP_VERSION}.apk`;
 
 export default function LoginScreen() {
+  const insets = useSafeAreaInsets();
   const { signIn, signUp, resetPasswordForEmail } = useAuth();
   const [mode, setMode] = useState<'signIn' | 'signUp' | 'forgotPassword'>('signIn');
   const [email, setEmail] = useState('');
@@ -70,6 +84,28 @@ export default function LoginScreen() {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
+      {Platform.OS === 'web' && (
+        <View style={[styles.downloadRow, { paddingTop: insets.top + 16 }]}>
+          <Pressable
+            onPress={() => Linking.openURL(APK_DOWNLOAD_URL)}
+            hitSlop={8}
+            style={styles.downloadButton}
+          >
+            <Ionicons name="download-outline" size={20} color={colors.subtext} />
+            <Text style={styles.downloadButtonLabel}>앱 다운로드</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => Linking.openURL(LOCAL_APK_DOWNLOAD_URL)}
+            hitSlop={8}
+            style={styles.downloadButton}
+          >
+            <Ionicons name="phone-portrait-outline" size={20} color={colors.subtext} />
+            <Text style={styles.downloadButtonLabel}>로컬앱 다운로드</Text>
+          </Pressable>
+        </View>
+      )}
+
+      <View style={styles.formWrap}>
       <Text style={styles.title}>Naru</Text>
       <Text style={styles.subtitle}>{subtitle}</Text>
 
@@ -122,6 +158,7 @@ export default function LoginScreen() {
             : '계정이 없으신가요? 회원가입'}
         </Text>
       </Pressable>
+      </View>
     </KeyboardAvoidingView>
   );
 }
@@ -130,6 +167,23 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  downloadRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 28,
+    paddingBottom: 12,
+  },
+  downloadButton: {
+    alignItems: 'center',
+    gap: 2,
+  },
+  downloadButtonLabel: {
+    fontSize: 11,
+    color: colors.subtext,
+  },
+  formWrap: {
+    flex: 1,
     justifyContent: 'center',
     paddingHorizontal: 28,
   },
