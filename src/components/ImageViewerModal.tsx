@@ -49,6 +49,7 @@ function ZoomableImagePage({
 }) {
   const size = useImageSize(uri);
   const [scale, setScale] = useState(1);
+  const [touchCount, setTouchCount] = useState(0);
   const lastDistance = useRef<number | null>(null);
 
   const panResponder = useRef(
@@ -66,8 +67,12 @@ function ZoomableImagePage({
       onPanResponderGrant: () => {
         onPinchStart?.();
       },
+      // 기본값은 "누가 달라고 하면 넘겨준다"라, responder를 잡은 뒤에도 바깥
+      // FlatList가 다시 뺏어갈 수 있었다 — 핀치 도중엔 절대 안 넘겨주도록 거절.
+      onPanResponderTerminationRequest: () => false,
       onPanResponderMove: (evt) => {
         const touches = evt.nativeEvent.touches;
+        setTouchCount(touches.length);
         if (touches.length !== 2) return;
         const dx = touches[0].pageX - touches[1].pageX;
         const dy = touches[0].pageY - touches[1].pageY;
@@ -102,6 +107,11 @@ function ZoomableImagePage({
           resizeMode="contain"
         />
       </View>
+
+      {/* 임시 디버그 표시 — 핀치줌 원인 확인용, 확인되면 뺄 것 */}
+      <Text style={styles.debugText}>
+        touches: {touchCount} / scale: {scale.toFixed(2)}
+      </Text>
 
       {Platform.OS === 'web' && (
         <View style={styles.zoomControls}>
@@ -224,6 +234,18 @@ const styles = StyleSheet.create({
     width: '100%',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  debugText: {
+    position: 'absolute',
+    top: 10,
+    alignSelf: 'center',
+    color: '#FFD54F',
+    fontSize: 13,
+    fontWeight: '700',
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
   },
   zoomControls: {
     position: 'absolute',
