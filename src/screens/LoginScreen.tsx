@@ -10,7 +10,6 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../auth/AuthContext';
 import { colors } from '../theme/colors';
@@ -27,7 +26,6 @@ const LOCAL_APP_VERSION = '1.0.0';
 const LOCAL_APK_DOWNLOAD_URL = `https://github.com/eduicms7-cyber/naru/releases/latest/download/naru-local-v${LOCAL_APP_VERSION}.apk`;
 
 export default function LoginScreen() {
-  const insets = useSafeAreaInsets();
   const { signIn, signUp, resetPasswordForEmail } = useAuth();
   const [mode, setMode] = useState<'signIn' | 'signUp' | 'forgotPassword'>('signIn');
   const [email, setEmail] = useState('');
@@ -84,27 +82,6 @@ export default function LoginScreen() {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      {Platform.OS === 'web' && (
-        <View style={[styles.downloadRow, { paddingTop: insets.top + 16 }]}>
-          <Pressable
-            onPress={() => Linking.openURL(APK_DOWNLOAD_URL)}
-            hitSlop={8}
-            style={styles.downloadButton}
-          >
-            <Ionicons name="download-outline" size={20} color={colors.subtext} />
-            <Text style={styles.downloadButtonLabel}>앱 다운로드</Text>
-          </Pressable>
-          <Pressable
-            onPress={() => Linking.openURL(LOCAL_APK_DOWNLOAD_URL)}
-            hitSlop={8}
-            style={styles.downloadButton}
-          >
-            <Ionicons name="phone-portrait-outline" size={20} color={colors.subtext} />
-            <Text style={styles.downloadButtonLabel}>로컬앱 다운로드</Text>
-          </Pressable>
-        </View>
-      )}
-
       <View style={styles.formWrap}>
       <Text style={styles.title}>Naru</Text>
       <Text style={styles.subtitle}>{subtitle}</Text>
@@ -158,6 +135,27 @@ export default function LoginScreen() {
             : '계정이 없으신가요? 회원가입'}
         </Text>
       </Pressable>
+
+      {Platform.OS === 'web' && (
+        <View style={styles.downloadRow}>
+          <Pressable
+            onPress={() => Linking.openURL(APK_DOWNLOAD_URL)}
+            hitSlop={8}
+            style={styles.downloadButton}
+          >
+            <Ionicons name="download-outline" size={20} color={colors.subtext} />
+            <Text style={styles.downloadButtonLabel}>앱 다운로드</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => Linking.openURL(LOCAL_APK_DOWNLOAD_URL)}
+            hitSlop={8}
+            style={styles.downloadButton}
+          >
+            <Ionicons name="phone-portrait-outline" size={20} color={colors.subtext} />
+            <Text style={styles.downloadButtonLabel}>로컬앱 다운로드</Text>
+          </Pressable>
+        </View>
+      )}
       </View>
     </KeyboardAvoidingView>
   );
@@ -172,7 +170,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     gap: 28,
-    paddingBottom: 12,
+    marginTop: 40,
   },
   downloadButton: {
     alignItems: 'center',
