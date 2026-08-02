@@ -225,18 +225,29 @@ class WakeReviewActivity : Activity() {
     }
   }
 
+  // 카드 내용이 길면(다음 슬라이드처럼 고정 높이라 넘칠 수 있음) 세로로 스크롤할 수
+  // 있어야 한다. ScrollView + isFillViewport로 감싸서, 내용이 짧을 땐 기존처럼
+  // 세로 가운데 정렬되고 길 땐 위에서부터 스크롤되도록 한다.
   private fun buildSlide(memo: DueMemo): View {
+    val text = TextView(this).apply {
+      text = memo.text.ifEmpty { "이미지 메모" }
+      setTextColor(if (memo.color != null) Color.parseColor("#1C1C1E") else Color.WHITE)
+      textSize = 20f
+      gravity = Gravity.CENTER_VERTICAL or Gravity.START
+      setPadding(dp(20), dp(20), dp(20), dp(20))
+    }
+    val inner = FrameLayout(this).apply {
+      addView(text, FrameLayout.LayoutParams(
+        FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT
+      ).apply { gravity = Gravity.CENTER_VERTICAL })
+    }
+    val scroll = ScrollView(this).apply {
+      isFillViewport = true
+      addView(inner, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+    }
     return FrameLayout(this).apply {
       background = roundedDrawable(memo.color ?: "#2C2C2E", dp(16))
-      setPadding(dp(20), dp(20), dp(20), dp(20))
-      addView(TextView(this@WakeReviewActivity).apply {
-        text = memo.text.ifEmpty { "이미지 메모" }
-        setTextColor(if (memo.color != null) Color.parseColor("#1C1C1E") else Color.WHITE)
-        textSize = 20f
-        gravity = Gravity.CENTER_VERTICAL or Gravity.START
-      }, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT).apply {
-        gravity = Gravity.CENTER
-      })
+      addView(scroll, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
     }
   }
 
