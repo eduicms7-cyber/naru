@@ -87,7 +87,7 @@ supabase/
 
 ## 데이터 모델
 
-- `Todo { id, title, done, createdAt, completedAt?, tags? }` — 테이블: `todos`. `completedAt`은 `done`을 켤 때 채워지고 끄면 지워집니다.
+- `Todo { id, title, done, createdAt, completedAt?, tags?, isPinned? }` — 테이블: `todos`. `completedAt`은 `done`을 켤 때 채워지고 끄면 지워집니다. `isPinned`은 오늘 탭 목록 정렬용 별표(공지처럼 무조건 최상단) — 정렬 순서는 `TodayScreen.tsx`의 `visibleTodos`에 있음: ①고정 여부 ②미완료가 완료보다 먼저 ③같은 그룹 내에서는 미완료는 작성일(`createdAt`), 완료는 완료일(`completedAt`) 기준 내림차순.
 - `Memo { id, text, imageUri?, createdAt, reviewStage, nextReviewAt, lastReviewedAt?, isPinned?, tags?, color?, noteType?, checklistItems? }` — 지식창고 카드. 테이블: `memos` (테이블/컬럼명은 마이그레이션 부담 때문에 그대로 유지, 화면·UI 용어만 "지식창고"). `isPinned`은 목록 상단 고정(구글킵 스타일, 별 아이콘)용이며 복습 간격에는 영향을 주지 않습니다. `tags`는 자유 라벨, `color`는 `cardColors` 프리셋 중 하나. `noteType`이 `'checklist'`면 `text`는 선택적 제목으로, `checklistItems: { id, text, done }[]`가 본문으로 쓰입니다(없으면 `'text'`로 취급하고 `text`에 `**굵게**`/`_기울임_`/`~~취소선~~`/`# 헤딩` 마크업을 쓸 수 있음 — `src/utils/richText.ts` 파싱, `src/components/MemoBody.tsx`가 렌더링).
 - `ScheduleEvent { id, date(YYYY-MM-DD), title, createdAt }` — 테이블: `schedules`
 - `Favorite { id, title, url, order, createdAt }` — 즐겨찾기 링크. 테이블: `favorites` (`order` 필드는 DB 컬럼 `position`에 매핑 — `order`가 SQL 예약어라 컬럼명은 다르게 둠). `order`가 작을수록 목록 위쪽에 표시되며, 화살표 버튼으로 순서를 바꿀 때는 인접한 두 항목의 `order` 값을 서로 맞바꿔 각각 개별 `updateItem`으로 저장합니다.

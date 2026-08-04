@@ -5,6 +5,7 @@ export interface Todo {
   createdAt: number;
   completedAt?: number;
   tags?: string[];
+  isPinned?: boolean;
 }
 
 export interface ChecklistItem {

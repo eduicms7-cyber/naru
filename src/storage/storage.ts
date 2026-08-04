@@ -28,6 +28,7 @@ function rowToTodo(row: any): Todo {
     createdAt: row.created_at,
     completedAt: row.completed_at ?? undefined,
     tags: row.tags ?? undefined,
+    isPinned: row.is_pinned ?? undefined,
   };
 }
 
@@ -40,6 +41,7 @@ function todoToRow(item: Todo, userId: string) {
     created_at: item.createdAt,
     completed_at: item.completedAt ?? null,
     tags: item.tags ?? [],
+    is_pinned: item.isPinned ?? false,
   };
 }
 

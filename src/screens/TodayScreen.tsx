@@ -130,6 +130,13 @@ export default function TodayScreen() {
     if (changed) updateItem(STORAGE_KEYS.TODOS, changed);
   };
 
+  const togglePinned = (id: string) => {
+    const updated = todos.map((t) => (t.id === id ? { ...t, isPinned: !t.isPinned } : t));
+    setTodos(updated);
+    const changed = updated.find((t) => t.id === id);
+    if (changed) updateItem(STORAGE_KEYS.TODOS, changed);
+  };
+
   const deleteTodo = (id: string) => {
     setTodos(todos.filter((t) => t.id !== id));
     deleteItem(STORAGE_KEYS.TODOS, id);
@@ -141,10 +148,20 @@ export default function TodayScreen() {
     return Array.from(set);
   }, [todos]);
 
-  const visibleTodos = useMemo(
-    () => (selectedTag ? todos.filter((t) => t.tags?.includes(selectedTag)) : todos),
-    [todos, selectedTag]
-  );
+  const visibleTodos = useMemo(() => {
+    const filtered = selectedTag ? todos.filter((t) => t.tags?.includes(selectedTag)) : todos;
+    // 별표(고정) 항목이 공지처럼 무조건 맨 위, 그 다음 미완료 → 완료 순.
+    // 같은 그룹 안에서는 미완료는 작성일 내림차순, 완료는 완료일 내림차순으로 정렬.
+    return [...filtered].sort((a, b) => {
+      const pinnedDiff = Number(!!b.isPinned) - Number(!!a.isPinned);
+      if (pinnedDiff !== 0) return pinnedDiff;
+      const doneDiff = Number(a.done) - Number(b.done);
+      if (doneDiff !== 0) return doneDiff;
+      return a.done
+        ? (b.completedAt ?? 0) - (a.completedAt ?? 0)
+        : b.createdAt - a.createdAt;
+    });
+  }, [todos, selectedTag]);
 
   if (!loaded) return <View style={styles.container} />;
 
@@ -257,6 +274,13 @@ export default function TodayScreen() {
               )}
             </View>
             <View style={styles.todoActions}>
+              <Pressable onPress={() => togglePinned(item.id)} hitSlop={8}>
+                <Ionicons
+                  name={item.isPinned ? 'star' : 'star-outline'}
+                  size={20}
+                  color={item.isPinned ? colors.star : colors.subtext}
+                />
+              </Pressable>
               <Pressable onPress={() => openEditForm(item)} hitSlop={8}>
                 <Ionicons name="pencil-outline" size={20} color={colors.subtext} />
               </Pressable>

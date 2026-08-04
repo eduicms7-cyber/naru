@@ -8,7 +8,8 @@ create table if not exists todos (
   done boolean not null default false,
   created_at bigint not null,
   completed_at bigint,
-  tags text[] not null default '{}'
+  tags text[] not null default '{}',
+  is_pinned boolean not null default false
 );
 
 create table if not exists memos (
@@ -37,6 +38,7 @@ create table if not exists memos (
 -- alter table memos add column if not exists checklist_items jsonb not null default '[]';
 -- alter table todos add column if not exists completed_at bigint;
 -- alter table todos add column if not exists tags text[] not null default '{}';
+-- alter table todos add column if not exists is_pinned boolean not null default false;
 
 -- 카드 하나당 이미지 여러 장 첨부 기능: 기존 memos 테이블에 image_uris 배열 컬럼을 추가하고,
 -- 이미 있던 단일 이미지(image_uri) 값을 배열의 첫 원소로 옮긴다. image_uri 컬럼은 당분간
