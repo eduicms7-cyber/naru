@@ -22,15 +22,23 @@ const APP_VERSION = appJson.expo.version;
 const APK_DOWNLOAD_URL = `https://github.com/eduicms7-cyber/naru/releases/latest/download/naru-v${APP_VERSION}.apk`;
 // 로컬 전용("Naru Local") 버전은 별도 앱(패키지)이라 app.json의 버전과 무관하게
 // 독립적으로 관리된다 — 새로 빌드/배포할 때마다 이 버전 문자열을 직접 올려줘야 한다.
-const LOCAL_APP_VERSION = '1.0.5';
+const LOCAL_APP_VERSION = '1.0.6';
 const LOCAL_APK_DOWNLOAD_URL = `https://github.com/eduicms7-cyber/naru/releases/latest/download/naru-local-v${LOCAL_APP_VERSION}.apk`;
 
 export default function LoginScreen() {
-  const { signIn, signUp, resetPasswordForEmail } = useAuth();
+  const { signIn, signUp, signInWithGoogle, resetPasswordForEmail } = useAuth();
   const [mode, setMode] = useState<'signIn' | 'signUp' | 'forgotPassword'>('signIn');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [googleSubmitting, setGoogleSubmitting] = useState(false);
+
+  const submitGoogle = async () => {
+    setGoogleSubmitting(true);
+    const errorMessage = await signInWithGoogle();
+    setGoogleSubmitting(false);
+    if (errorMessage) showAlert('구글 로그인 실패', errorMessage);
+  };
 
   const submit = async () => {
     if (!email.trim()) {
@@ -116,6 +124,30 @@ export default function LoginScreen() {
           </Text>
         )}
       </Pressable>
+
+      {mode !== 'forgotPassword' && (
+        <>
+          <View style={styles.dividerRow}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>또는</Text>
+            <View style={styles.dividerLine} />
+          </View>
+          <Pressable
+            style={styles.googleButton}
+            onPress={submitGoogle}
+            disabled={googleSubmitting}
+          >
+            {googleSubmitting ? (
+              <ActivityIndicator color={colors.text} />
+            ) : (
+              <>
+                <Ionicons name="logo-google" size={18} color={colors.text} />
+                <Text style={styles.googleButtonText}>구글로 계속하기</Text>
+              </>
+            )}
+          </Pressable>
+        </>
+      )}
 
       {mode === 'signIn' && Platform.OS === 'web' && (
         <Pressable onPress={() => setMode('forgotPassword')} hitSlop={8}>
@@ -226,5 +258,37 @@ const styles = StyleSheet.create({
     fontSize: 13,
     textAlign: 'center',
     marginTop: 18,
+  },
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 20,
+    gap: 10,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: colors.border,
+  },
+  dividerText: {
+    fontSize: 12,
+    color: colors.subtext,
+  },
+  googleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 10,
+    paddingVertical: 13,
+    marginTop: 16,
+  },
+  googleButtonText: {
+    color: colors.text,
+    fontSize: 15,
+    fontWeight: '600',
   },
 });

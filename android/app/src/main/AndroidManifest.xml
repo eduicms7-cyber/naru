@@ -26,6 +26,14 @@
         <action android:name="android.intent.action.MAIN"/>
         <category android:name="android.intent.category.LAUNCHER"/>
       </intent-filter>
+      <!-- 구글 로그인 콜백(naru://auth-callback)을 앱으로 돌려받기 위한 딥링크.
+           android:scheme 값은 Naru Local 빌드 시 "narulocal"로 임시 교체함(CLAUDE.md). -->
+      <intent-filter>
+        <action android:name="android.intent.action.VIEW"/>
+        <category android:name="android.intent.category.DEFAULT"/>
+        <category android:name="android.intent.category.BROWSABLE"/>
+        <data android:scheme="naru"/>
+      </intent-filter>
     </activity>
     <activity android:name=".reviewwidget.WakeReviewActivity" android:exported="false" android:theme="@style/AppTheme" android:launchMode="singleTask" android:excludeFromRecents="true" android:showWhenLocked="true" android:turnScreenOn="true"/>
     <service android:name=".reviewwidget.WakeMonitorService" android:exported="false" android:foregroundServiceType="specialUse">
