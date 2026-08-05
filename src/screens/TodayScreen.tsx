@@ -187,7 +187,7 @@ export default function TodayScreen() {
           )}
         </View>
         <Text style={styles.title}>오늘 할 일</Text>
-        {todos.length > 0 && (
+        {allTags.length === 0 && todos.length > 0 && (
           <Text style={styles.progress}>
             {doneCount} / {todos.length} 완료
           </Text>
@@ -195,12 +195,18 @@ export default function TodayScreen() {
       </View>
 
       {allTags.length > 0 && (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.tagFilterRow}
-          contentContainerStyle={styles.tagFilterContent}
-        >
+        <View style={styles.filterRow}>
+          {todos.length > 0 && (
+            <Text style={styles.progressInline}>
+              {doneCount}/{todos.length}
+            </Text>
+          )}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.tagFilterScroll}
+            contentContainerStyle={styles.tagFilterContent}
+          >
           <Pressable
             style={[styles.tagFilterChip, !selectedTag && styles.tagFilterChipActive]}
             onPress={() => setSelectedTag(null)}
@@ -225,7 +231,8 @@ export default function TodayScreen() {
               </Text>
             </Pressable>
           ))}
-        </ScrollView>
+          </ScrollView>
+        </View>
       )}
 
       <FlatList
@@ -396,12 +403,24 @@ const styles = StyleSheet.create({
     color: colors.subtext,
     fontSize: 15,
   },
-  tagFilterRow: {
-    maxHeight: 40,
+  filterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingLeft: 20,
     marginBottom: 8,
+    gap: 10,
+  },
+  progressInline: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.primary,
+  },
+  tagFilterScroll: {
+    flex: 1,
   },
   tagFilterContent: {
-    paddingHorizontal: 20,
+    alignItems: 'center',
+    paddingRight: 20,
     gap: 8,
   },
   tagFilterChip: {
@@ -409,7 +428,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: 14,
-    paddingVertical: 6,
+    paddingVertical: 7,
     paddingHorizontal: 12,
     marginRight: 8,
   },
@@ -419,6 +438,7 @@ const styles = StyleSheet.create({
   },
   tagFilterChipText: {
     fontSize: 13,
+    lineHeight: 18,
     color: colors.subtext,
   },
   tagFilterChipTextActive: {
