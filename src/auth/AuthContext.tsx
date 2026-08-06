@@ -47,8 +47,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signUp = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signUp({ email, password });
-    return error ? error.message : null;
+    const { data, error } = await supabase.auth.signUp({ email, password });
+    if (error) return error.message;
+    // 이메일 나열(enumeration) 공격 방지를 위해 Supabase는 이미 가입된(확인된) 이메일로
+    // 다시 가입 시도해도 에러를 주지 않고 빈 identities 배열을 가진 가짜 유저를 반환한다 —
+    // 이 경우만 골라내서 실제로는 신규 가입이 아니었음을 알려준다.
+    if (data.user && data.user.identities && data.user.identities.length === 0) {
+      return '이미 가입된 이메일입니다. 로그인해주세요.';
+    }
+    return null;
   };
 
   // 웹: 브라우저가 페이지를 벗어났다 돌아오고, 콜백 URL의 ?code=는 detectSessionInUrl이 알아서 처리한다.
