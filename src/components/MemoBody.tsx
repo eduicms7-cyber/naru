@@ -1,9 +1,30 @@
 import React from 'react';
-import { Pressable, StyleProp, StyleSheet, Text, TextStyle, View } from 'react-native';
+import { Linking, Pressable, StyleProp, StyleSheet, Text, TextStyle, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Memo } from '../types';
 import { colors } from '../theme/colors';
-import { parseBlocks, parseInlineFormatting, stripHeadingMarkers } from '../utils/richText';
+import { FormattedSegment, parseBlocks, parseInlineFormatting, stripHeadingMarkers } from '../utils/richText';
+
+function FormattedText({ segments }: { segments: FormattedSegment[] }) {
+  return (
+    <>
+      {segments.map((seg, i) => (
+        <Text
+          key={i}
+          style={[
+            seg.bold && styles.bold,
+            seg.italic && styles.italic,
+            seg.strike && styles.strike,
+            seg.url && styles.link,
+          ]}
+          onPress={seg.url ? () => Linking.openURL(seg.url as string) : undefined}
+        >
+          {seg.text}
+        </Text>
+      ))}
+    </>
+  );
+}
 
 interface Props {
   memo: Memo;
@@ -38,7 +59,7 @@ export default function MemoBody({ memo, onToggleItem, textStyle, numberOfLines 
                   item.done && styles.checklistTextDone,
                 ]}
               >
-                {item.text}
+                <FormattedText segments={parseInlineFormatting(item.text)} />
               </Text>
             </View>
           );
@@ -63,18 +84,7 @@ export default function MemoBody({ memo, onToggleItem, textStyle, numberOfLines 
     const segments = parseInlineFormatting(stripHeadingMarkers(memo.text));
     return (
       <Text style={[styles.text, textStyle]} numberOfLines={numberOfLines}>
-        {segments.map((seg, i) => (
-          <Text
-            key={i}
-            style={[
-              seg.bold && styles.bold,
-              seg.italic && styles.italic,
-              seg.strike && styles.strike,
-            ]}
-          >
-            {seg.text}
-          </Text>
-        ))}
+        <FormattedText segments={segments} />
       </Text>
     );
   }
@@ -93,18 +103,7 @@ export default function MemoBody({ memo, onToggleItem, textStyle, numberOfLines 
             block.level === 3 && styles.h3,
           ]}
         >
-          {block.segments.map((seg, j) => (
-            <Text
-              key={j}
-              style={[
-                seg.bold && styles.bold,
-                seg.italic && styles.italic,
-                seg.strike && styles.strike,
-              ]}
-            >
-              {seg.text}
-            </Text>
-          ))}
+          <FormattedText segments={block.segments} />
         </Text>
       ))}
     </View>
@@ -147,6 +146,10 @@ const styles = StyleSheet.create({
   },
   strike: {
     textDecorationLine: 'line-through',
+  },
+  link: {
+    color: colors.primary,
+    textDecorationLine: 'underline',
   },
   checklistRow: {
     flexDirection: 'row',

@@ -5,27 +5,62 @@ export interface FormattedSegment {
   bold?: boolean;
   italic?: boolean;
   strike?: boolean;
+  url?: string;
 }
 
 // 굵게 **텍스트**, 취소선 ~~텍스트~~, 기울임 _텍스트_ — 중첩 서식은 지원하지 않는다.
 const FORMAT_PATTERN = /\*\*(.+?)\*\*|~~(.+?)~~|_(.+?)_/g;
 
+const URL_PATTERN = /https?:\/\/[^\s]+/g;
+// URL 뒤에 붙는 문장부호(마침표, 쉼표, 괄호 닫기 등)는 링크에서 제외하고 일반 텍스트로 남긴다.
+const URL_TRAILING_PUNCTUATION = /[)\].,!?;:'"]+$/;
+
+// 서식이 적용된 한 조각의 텍스트 안에서 URL만 골라 별도 세그먼트로 쪼갠다(서식은 유지).
+function splitUrls(
+  text: string,
+  base: Pick<FormattedSegment, 'bold' | 'italic' | 'strike'>
+): FormattedSegment[] {
+  const parts: FormattedSegment[] = [];
+  let lastIndex = 0;
+  for (const match of text.matchAll(URL_PATTERN)) {
+    const index = match.index ?? 0;
+    if (index > lastIndex) {
+      parts.push({ ...base, text: text.slice(lastIndex, index) });
+    }
+    let url = match[0];
+    const trailingMatch = url.match(URL_TRAILING_PUNCTUATION);
+    const trailing = trailingMatch ? trailingMatch[0] : '';
+    if (trailing) url = url.slice(0, url.length - trailing.length);
+    parts.push({ ...base, text: url, url });
+    if (trailing) parts.push({ ...base, text: trailing });
+    lastIndex = index + match[0].length;
+  }
+  if (lastIndex < text.length) {
+    parts.push({ ...base, text: text.slice(lastIndex) });
+  }
+  return parts;
+}
+
 export function parseInlineFormatting(input: string): FormattedSegment[] {
-  const segments: FormattedSegment[] = [];
+  const rawSegments: FormattedSegment[] = [];
   let lastIndex = 0;
   for (const match of input.matchAll(FORMAT_PATTERN)) {
     const index = match.index ?? 0;
     if (index > lastIndex) {
-      segments.push({ text: input.slice(lastIndex, index) });
+      rawSegments.push({ text: input.slice(lastIndex, index) });
     }
-    if (match[1] !== undefined) segments.push({ text: match[1], bold: true });
-    else if (match[2] !== undefined) segments.push({ text: match[2], strike: true });
-    else if (match[3] !== undefined) segments.push({ text: match[3], italic: true });
+    if (match[1] !== undefined) rawSegments.push({ text: match[1], bold: true });
+    else if (match[2] !== undefined) rawSegments.push({ text: match[2], strike: true });
+    else if (match[3] !== undefined) rawSegments.push({ text: match[3], italic: true });
     lastIndex = index + match[0].length;
   }
   if (lastIndex < input.length) {
-    segments.push({ text: input.slice(lastIndex) });
+    rawSegments.push({ text: input.slice(lastIndex) });
   }
+
+  const segments = rawSegments.flatMap((seg) =>
+    splitUrls(seg.text, { bold: seg.bold, italic: seg.italic, strike: seg.strike })
+  );
   return segments.length > 0 ? segments : [{ text: input }];
 }
 
