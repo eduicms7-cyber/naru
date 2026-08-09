@@ -15,6 +15,8 @@ import {
 import { NavigationProp, RouteProp, useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
+import * as Clipboard from 'expo-clipboard';
+import * as FileSystem from 'expo-file-system/legacy';
 import { Ionicons } from '@expo/vector-icons';
 import { createItem, deleteItem, loadItems, updateItem } from '../storage/storage';
 import { ChecklistItem, Memo, STORAGE_KEYS, Todo } from '../types';
@@ -73,6 +75,7 @@ export default function KnowledgeVaultScreen() {
   const [palaceOpen, setPalaceOpen] = useState(false);
   // 표시용이 아니라 기억의 궁전(잠금화면/앱 내)에 오늘 할 일을 전달하고 완료 체크를 반영하기 위한 값.
   const [todayTodos, setTodayTodos] = useState<Todo[]>([]);
+  const composerInputRef = useRef<TextInput>(null);
 
   const dueMemos = useMemo(
     () => memos.filter((m) => isDueForReview(m, now)),
@@ -100,6 +103,29 @@ export default function KnowledgeVaultScreen() {
     requestReviewPermission();
     startWakeMonitor();
   }, []);
+
+  // 웹에서만 가능: RN TextInput은 onPaste를 지원하지 않고 react-native-web도 이 prop을
+  // 전달하지 않으므로, 웹에서 렌더링되는 실제 DOM 노드에 직접 paste 리스너를 붙인다.
+  // 네이티브(iOS/Android)는 아래 클립보드 버튼(pasteImageFromClipboard)으로 대체.
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !composerOpen) return;
+    const node = composerInputRef.current as unknown as HTMLElement | null;
+    if (!node) return;
+    const handlePaste = (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      const imageFiles = Array.from(items)
+        .filter((item) => item.type.startsWith('image/'))
+        .map((item) => item.getAsFile())
+        .filter((file): file is File => !!file);
+      if (imageFiles.length === 0) return;
+      e.preventDefault();
+      const uris = imageFiles.map((file) => URL.createObjectURL(file));
+      setImageUris((prev) => [...prev, ...uris]);
+    };
+    node.addEventListener('paste', handlePaste as EventListener);
+    return () => node.removeEventListener('paste', handlePaste as EventListener);
+  }, [composerOpen]);
 
   useFocusEffect(
     useCallback(() => {
@@ -255,6 +281,28 @@ export default function KnowledgeVaultScreen() {
     });
     if (!result.canceled && result.assets.length > 0) {
       setImageUris((prev) => [...prev, ...result.assets.map((asset) => asset.uri)]);
+    }
+  };
+
+  // 네이티브에는 RN TextInput onPaste가 없어 Ctrl+V로 붙여넣기를 감지할 수 없으므로,
+  // 버튼을 눌러 명시적으로 클립보드 이미지를 가져온다(웹은 위 paste 리스너가 담당).
+  const pasteImageFromClipboard = async () => {
+    try {
+      const image = await Clipboard.getImageAsync({ format: 'png' });
+      if (!image) {
+        showAlert('붙여넣을 이미지 없음', '클립보드에 이미지가 없습니다.');
+        return;
+      }
+      const base64 = image.data.split(',')[1] ?? image.data;
+      const fileUri = `${FileSystem.cacheDirectory}paste-${Date.now()}-${Math.random()
+        .toString(36)
+        .slice(2, 7)}.png`;
+      await FileSystem.writeAsStringAsync(fileUri, base64, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+      setImageUris((prev) => [...prev, fileUri]);
+    } catch (e) {
+      showAlert('붙여넣기 실패', '클립보드 이미지를 가져오지 못했습니다.');
     }
   };
 
@@ -556,6 +604,7 @@ export default function KnowledgeVaultScreen() {
             )}
 
             <TextInput
+              ref={composerInputRef}
               style={[styles.composerInput, noteType === 'checklist' && styles.composerInputCompact]}
               placeholder={noteType === 'checklist' ? '제목 (선택)' : '내용을 입력하세요'}
               placeholderTextColor={colors.subtext}
@@ -648,6 +697,12 @@ export default function KnowledgeVaultScreen() {
               <Ionicons name="image-outline" size={22} color={colors.primary} />
               <Text style={styles.toolbarButtonText}>이미지 추가</Text>
             </Pressable>
+            {Platform.OS !== 'web' && (
+              <Pressable style={styles.toolbarButton} onPress={pasteImageFromClipboard}>
+                <Ionicons name="clipboard-outline" size={22} color={colors.primary} />
+                <Text style={styles.toolbarButtonText}>붙여넣기</Text>
+              </Pressable>
+            )}
           </View>
         </KeyboardAvoidingView>
       </Modal>
