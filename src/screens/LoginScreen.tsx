@@ -22,7 +22,7 @@ const APP_VERSION = appJson.expo.version;
 const APK_DOWNLOAD_URL = `https://github.com/eduicms7-cyber/naru/releases/latest/download/naru-v${APP_VERSION}.apk`;
 // 로컬 전용("Naru Local") 버전은 별도 앱(패키지)이라 app.json의 버전과 무관하게
 // 독립적으로 관리된다 — 새로 빌드/배포할 때마다 이 버전 문자열을 직접 올려줘야 한다.
-const LOCAL_APP_VERSION = '1.0.7';
+const LOCAL_APP_VERSION = '1.0.8';
 const LOCAL_APK_DOWNLOAD_URL = `https://github.com/eduicms7-cyber/naru/releases/latest/download/naru-local-v${LOCAL_APP_VERSION}.apk`;
 
 export default function LoginScreen() {
