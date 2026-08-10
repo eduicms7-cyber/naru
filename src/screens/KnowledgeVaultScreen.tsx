@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   FlatList,
-  Image,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -14,9 +13,6 @@ import {
 } from 'react-native';
 import { NavigationProp, RouteProp, useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import * as ImagePicker from 'expo-image-picker';
-import * as Clipboard from 'expo-clipboard';
-import * as FileSystem from 'expo-file-system/legacy';
 import { Ionicons } from '@expo/vector-icons';
 import { createItem, deleteItem, loadItems, updateItem } from '../storage/storage';
 import { ChecklistItem, Memo, STORAGE_KEYS, Todo } from '../types';
@@ -32,18 +28,15 @@ import {
   showReview,
   startWakeMonitor,
 } from '../native/ReviewWidget';
-import { showAlert } from '../utils/alert';
 import { memoSummaryText } from '../utils/richText';
 import { parseTags } from '../utils/tags';
 import { formatShortDate } from '../utils/date';
 import MemoBody from '../components/MemoBody';
 import MemoImage from '../components/MemoImage';
+import NoteContentEditor from '../components/NoteContentEditor';
+import { showAlert } from '../utils/alert';
 import MemoryPalaceScreen from './MemoryPalaceScreen';
 import type { TabParamList } from '../navigation/TabNavigator';
-
-function makeId(): string {
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-}
 
 function formatDate(timestamp: number): string {
   const d = new Date(timestamp);
@@ -63,7 +56,6 @@ export default function KnowledgeVaultScreen() {
   const [composerOpen, setComposerOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [text, setText] = useState('');
-  const [textSelection, setTextSelection] = useState({ start: 0, end: 0 });
   const [imageUris, setImageUris] = useState<string[]>([]);
   const [color, setColor] = useState<string | undefined>(undefined);
   const [tagsInput, setTagsInput] = useState('');
@@ -75,7 +67,6 @@ export default function KnowledgeVaultScreen() {
   const [palaceOpen, setPalaceOpen] = useState(false);
   // 표시용이 아니라 기억의 궁전(잠금화면/앱 내)에 오늘 할 일을 전달하고 완료 체크를 반영하기 위한 값.
   const [todayTodos, setTodayTodos] = useState<Todo[]>([]);
-  const composerInputRef = useRef<TextInput>(null);
 
   const dueMemos = useMemo(
     () => memos.filter((m) => isDueForReview(m, now)),
@@ -103,29 +94,6 @@ export default function KnowledgeVaultScreen() {
     requestReviewPermission();
     startWakeMonitor();
   }, []);
-
-  // 웹에서만 가능: RN TextInput은 onPaste를 지원하지 않고 react-native-web도 이 prop을
-  // 전달하지 않으므로, 웹에서 렌더링되는 실제 DOM 노드에 직접 paste 리스너를 붙인다.
-  // 네이티브(iOS/Android)는 아래 클립보드 버튼(pasteImageFromClipboard)으로 대체.
-  useEffect(() => {
-    if (Platform.OS !== 'web' || !composerOpen) return;
-    const node = composerInputRef.current as unknown as HTMLElement | null;
-    if (!node) return;
-    const handlePaste = (e: ClipboardEvent) => {
-      const items = e.clipboardData?.items;
-      if (!items) return;
-      const imageFiles = Array.from(items)
-        .filter((item) => item.type.startsWith('image/'))
-        .map((item) => item.getAsFile())
-        .filter((file): file is File => !!file);
-      if (imageFiles.length === 0) return;
-      e.preventDefault();
-      const uris = imageFiles.map((file) => URL.createObjectURL(file));
-      setImageUris((prev) => [...prev, ...uris]);
-    };
-    node.addEventListener('paste', handlePaste as EventListener);
-    return () => node.removeEventListener('paste', handlePaste as EventListener);
-  }, [composerOpen]);
 
   useFocusEffect(
     useCallback(() => {
@@ -197,7 +165,6 @@ export default function KnowledgeVaultScreen() {
   const openComposer = () => {
     setEditingId(null);
     setText('');
-    setTextSelection({ start: 0, end: 0 });
     setImageUris([]);
     setColor(undefined);
     setTagsInput('');
@@ -209,7 +176,6 @@ export default function KnowledgeVaultScreen() {
   const openEditor = (item: Memo) => {
     setEditingId(item.id);
     setText(item.text);
-    setTextSelection({ start: 0, end: 0 });
     setImageUris(item.imageUris ?? []);
     setColor(item.color);
     setTagsInput((item.tags ?? []).join(', '));
@@ -228,87 +194,6 @@ export default function KnowledgeVaultScreen() {
       navigation.setParams({ focusMemoId: undefined });
     }
   }, [route.params?.focusMemoId, memos]);
-
-  const wrapSelection = (marker: string) => {
-    const { start, end } = textSelection;
-    const before = text.slice(0, start);
-    const middle = text.slice(start, end);
-    const after = text.slice(end);
-    const wrapped = `${marker}${middle || '텍스트'}${marker}`;
-    setText(before + wrapped + after);
-    const cursor = before.length + wrapped.length;
-    setTextSelection({ start: cursor, end: cursor });
-  };
-
-  // 커서가 있는 줄 맨 앞에 # / ## / ### 을 붙이거나(이미 같은 레벨이면) 뗀다.
-  const setHeadingLevel = (level: 1 | 2 | 3) => {
-    const cursor = textSelection.start;
-    const lineStart = text.lastIndexOf('\n', cursor - 1) + 1;
-    const lineEndIndex = text.indexOf('\n', cursor);
-    const lineEnd = lineEndIndex === -1 ? text.length : lineEndIndex;
-    const line = text.slice(lineStart, lineEnd);
-    const match = line.match(/^(#{1,3})\s+/);
-    const currentLevel = match ? match[1].length : 0;
-    const content = match ? line.slice(match[0].length) : line;
-    const newLine = currentLevel === level ? content : `${'#'.repeat(level)} ${content}`;
-    setText(text.slice(0, lineStart) + newLine + text.slice(lineEnd));
-    const cursorPos = lineStart + newLine.length;
-    setTextSelection({ start: cursorPos, end: cursorPos });
-  };
-
-  const addChecklistItem = () => {
-    setChecklistItems((items) => [...items, { id: makeId(), text: '', done: false }]);
-  };
-
-  const updateChecklistItemText = (id: string, value: string) => {
-    setChecklistItems((items) => items.map((it) => (it.id === id ? { ...it, text: value } : it)));
-  };
-
-  const removeChecklistItem = (id: string) => {
-    setChecklistItems((items) => items.filter((it) => it.id !== id));
-  };
-
-  const pickImages = async () => {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      showAlert('권한 필요', '이미지를 첨부하려면 사진 접근 권한이 필요합니다.');
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      quality: 0.7,
-      allowsMultipleSelection: true,
-    });
-    if (!result.canceled && result.assets.length > 0) {
-      setImageUris((prev) => [...prev, ...result.assets.map((asset) => asset.uri)]);
-    }
-  };
-
-  // 네이티브에는 RN TextInput onPaste가 없어 Ctrl+V로 붙여넣기를 감지할 수 없으므로,
-  // 버튼을 눌러 명시적으로 클립보드 이미지를 가져온다(웹은 위 paste 리스너가 담당).
-  const pasteImageFromClipboard = async () => {
-    try {
-      const image = await Clipboard.getImageAsync({ format: 'png' });
-      if (!image) {
-        showAlert('붙여넣을 이미지 없음', '클립보드에 이미지가 없습니다.');
-        return;
-      }
-      const base64 = image.data.split(',')[1] ?? image.data;
-      const fileUri = `${FileSystem.cacheDirectory}paste-${Date.now()}-${Math.random()
-        .toString(36)
-        .slice(2, 7)}.png`;
-      await FileSystem.writeAsStringAsync(fileUri, base64, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
-      setImageUris((prev) => [...prev, fileUri]);
-    } catch (e) {
-      showAlert('붙여넣기 실패', '클립보드 이미지를 가져오지 못했습니다.');
-    }
-  };
-
-  const removeImageAt = (index: number) => {
-    setImageUris((prev) => prev.filter((_, i) => i !== index));
-  };
 
   const saveMemo = () => {
     const trimmed = text.trim();
@@ -552,110 +437,22 @@ export default function KnowledgeVaultScreen() {
             </Pressable>
           </View>
 
-          <View style={styles.modeToggleRow}>
-            <Pressable
-              style={[styles.modeToggleButton, noteType === 'text' && styles.modeToggleButtonActive]}
-              onPress={() => setNoteType('text')}
-            >
-              <Text
-                style={[styles.modeToggleText, noteType === 'text' && styles.modeToggleTextActive]}
-              >
-                텍스트
-              </Text>
-            </Pressable>
-            <Pressable
-              style={[styles.modeToggleButton, noteType === 'checklist' && styles.modeToggleButtonActive]}
-              onPress={() => setNoteType('checklist')}
-            >
-              <Text
-                style={[
-                  styles.modeToggleText,
-                  noteType === 'checklist' && styles.modeToggleTextActive,
-                ]}
-              >
-                체크리스트
-              </Text>
-            </Pressable>
-          </View>
-
-          <ScrollView style={styles.composerScroll} keyboardShouldPersistTaps="handled">
-            {noteType === 'text' && (
-              <View style={styles.formatToolbar}>
-                <Pressable style={styles.formatButton} onPress={() => setHeadingLevel(1)}>
-                  <Text style={styles.formatButtonText}>H1</Text>
-                </Pressable>
-                <Pressable style={styles.formatButton} onPress={() => setHeadingLevel(2)}>
-                  <Text style={styles.formatButtonText}>H2</Text>
-                </Pressable>
-                <Pressable style={styles.formatButton} onPress={() => setHeadingLevel(3)}>
-                  <Text style={styles.formatButtonText}>H3</Text>
-                </Pressable>
-                <View style={styles.formatToolbarDivider} />
-                <Pressable style={styles.formatButton} onPress={() => wrapSelection('**')}>
-                  <Text style={[styles.formatButtonText, styles.formatBold]}>B</Text>
-                </Pressable>
-                <Pressable style={styles.formatButton} onPress={() => wrapSelection('_')}>
-                  <Text style={[styles.formatButtonText, styles.formatItalic]}>I</Text>
-                </Pressable>
-                <Pressable style={styles.formatButton} onPress={() => wrapSelection('~~')}>
-                  <Text style={[styles.formatButtonText, styles.formatStrike]}>S</Text>
-                </Pressable>
-              </View>
-            )}
-
-            <TextInput
-              ref={composerInputRef}
-              style={[styles.composerInput, noteType === 'checklist' && styles.composerInputCompact]}
-              placeholder={noteType === 'checklist' ? '제목 (선택)' : '내용을 입력하세요'}
-              placeholderTextColor={colors.subtext}
-              value={text}
-              onChangeText={setText}
-              onSelectionChange={(e) => setTextSelection(e.nativeEvent.selection)}
-              multiline={noteType === 'text'}
-              autoFocus
+          <ScrollView
+            style={styles.composerScroll}
+            contentContainerStyle={styles.composerScrollContent}
+            keyboardShouldPersistTaps="handled"
+          >
+            <NoteContentEditor
+              noteType={noteType}
+              onNoteTypeChange={setNoteType}
+              text={text}
+              onTextChange={setText}
+              checklistItems={checklistItems}
+              onChecklistItemsChange={setChecklistItems}
+              imageUris={imageUris}
+              onImageUrisChange={setImageUris}
+              active={composerOpen}
             />
-
-            {noteType === 'checklist' && (
-              <View style={styles.checklistEditor}>
-                {checklistItems.map((item) => (
-                  <View key={item.id} style={styles.checklistEditorRow}>
-                    <Ionicons name="square-outline" size={18} color={colors.subtext} />
-                    <TextInput
-                      style={styles.checklistEditorInput}
-                      placeholder="항목 입력"
-                      placeholderTextColor={colors.subtext}
-                      value={item.text}
-                      onChangeText={(value) => updateChecklistItemText(item.id, value)}
-                    />
-                    <Pressable onPress={() => removeChecklistItem(item.id)} hitSlop={8}>
-                      <Ionicons name="close" size={18} color={colors.subtext} />
-                    </Pressable>
-                  </View>
-                ))}
-                <Pressable style={styles.addChecklistItemButton} onPress={addChecklistItem}>
-                  <Ionicons name="add" size={16} color={colors.primary} />
-                  <Text style={styles.addChecklistItemText}>항목 추가</Text>
-                </Pressable>
-              </View>
-            )}
-
-            {imageUris.length > 0 && (
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={styles.previewWrap}
-                contentContainerStyle={styles.previewRow}
-              >
-                {imageUris.map((uri, index) => (
-                  <View key={`${uri}-${index}`} style={styles.previewItem}>
-                    <Image source={{ uri }} style={styles.previewImage} resizeMode="cover" />
-                    <Pressable style={styles.removeImageButton} onPress={() => removeImageAt(index)}>
-                      <Ionicons name="close-circle" size={22} color={colors.danger} />
-                    </Pressable>
-                  </View>
-                ))}
-              </ScrollView>
-            )}
 
             <Text style={styles.composerSectionLabel}>색상</Text>
             <View style={styles.colorRow}>
@@ -691,19 +488,6 @@ export default function KnowledgeVaultScreen() {
               </View>
             )}
           </ScrollView>
-
-          <View style={[styles.composerToolbar, { paddingBottom: insets.bottom + 12 }]}>
-            <Pressable style={styles.toolbarButton} onPress={pickImages}>
-              <Ionicons name="image-outline" size={22} color={colors.primary} />
-              <Text style={styles.toolbarButtonText}>이미지 추가</Text>
-            </Pressable>
-            {Platform.OS !== 'web' && (
-              <Pressable style={styles.toolbarButton} onPress={pasteImageFromClipboard}>
-                <Ionicons name="clipboard-outline" size={22} color={colors.primary} />
-                <Text style={styles.toolbarButtonText}>붙여넣기</Text>
-              </Pressable>
-            )}
-          </View>
         </KeyboardAvoidingView>
       </Modal>
 
@@ -903,141 +687,23 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontWeight: '600',
   },
-  modeToggleRow: {
-    flexDirection: 'row',
-    paddingHorizontal: 20,
-    paddingTop: 14,
-    gap: 8,
-  },
-  modeToggleButton: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 8,
-    borderRadius: 10,
-    backgroundColor: colors.background,
-  },
-  modeToggleButtonActive: {
-    backgroundColor: colors.primary,
-  },
-  modeToggleText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.subtext,
-  },
-  modeToggleTextActive: {
-    color: '#FFFFFF',
-  },
   composerScroll: {
     flex: 1,
   },
-  formatToolbar: {
-    flexDirection: 'row',
+  composerScrollContent: {
     paddingHorizontal: 20,
     paddingTop: 14,
-    gap: 10,
-  },
-  formatButton: {
-    minWidth: 32,
-    height: 32,
-    paddingHorizontal: 6,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  formatToolbarDivider: {
-    width: 1,
-    height: 20,
-    backgroundColor: colors.border,
-    alignSelf: 'center',
-  },
-  formatButtonText: {
-    fontSize: 14,
-    color: colors.text,
-  },
-  formatBold: {
-    fontWeight: '700',
-  },
-  formatItalic: {
-    fontStyle: 'italic',
-  },
-  formatStrike: {
-    textDecorationLine: 'line-through',
-  },
-  checklistEditor: {
-    paddingHorizontal: 20,
-    gap: 4,
-  },
-  checklistEditorRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: 6,
-  },
-  checklistEditorInput: {
-    flex: 1,
-    fontSize: 15,
-    color: colors.text,
-    paddingVertical: 4,
-  },
-  addChecklistItemButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingVertical: 8,
-  },
-  addChecklistItemText: {
-    fontSize: 14,
-    color: colors.primary,
-    fontWeight: '600',
-  },
-  composerInput: {
-    fontSize: 16,
-    color: colors.text,
-    padding: 20,
-    minHeight: 140,
-    textAlignVertical: 'top',
-  },
-  composerInputCompact: {
-    minHeight: 0,
-    paddingTop: 14,
-    paddingBottom: 6,
-  },
-  previewWrap: {
-    marginBottom: 10,
-  },
-  previewRow: {
-    paddingHorizontal: 20,
-    gap: 10,
-  },
-  previewItem: {
-    position: 'relative',
-  },
-  previewImage: {
-    width: 100,
-    height: 100,
-    borderRadius: 10,
-    backgroundColor: 'rgba(0,0,0,0.04)',
-  },
-  removeImageButton: {
-    position: 'absolute',
-    top: -8,
-    right: -8,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
+    paddingBottom: 24,
   },
   composerSectionLabel: {
     fontSize: 13,
     fontWeight: '600',
     color: colors.subtext,
-    paddingHorizontal: 20,
     marginTop: 8,
     marginBottom: 8,
   },
   colorRow: {
     flexDirection: 'row',
-    paddingHorizontal: 20,
     gap: 10,
     marginBottom: 8,
   },
@@ -1055,18 +721,16 @@ const styles = StyleSheet.create({
   tagInput: {
     fontSize: 14,
     color: colors.text,
-    paddingHorizontal: 20,
+    paddingHorizontal: 14,
     paddingVertical: 10,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: 10,
-    marginHorizontal: 20,
   },
   tagSuggestionRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
-    paddingHorizontal: 20,
     marginTop: 10,
   },
   tagSuggestionChip: {
@@ -1080,21 +744,5 @@ const styles = StyleSheet.create({
   tagSuggestionChipText: {
     fontSize: 12,
     color: colors.subtext,
-  },
-  composerToolbar: {
-    flexDirection: 'row',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
-  toolbarButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  toolbarButtonText: {
-    color: colors.primary,
-    fontSize: 14,
   },
 });

@@ -1,9 +1,17 @@
 import React from 'react';
 import { Linking, Pressable, StyleProp, StyleSheet, Text, TextStyle, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Memo } from '../types';
+import { ChecklistItem } from '../types';
 import { colors } from '../theme/colors';
 import { FormattedSegment, parseBlocks, parseInlineFormatting, stripHeadingMarkers } from '../utils/richText';
+
+// 지식창고 카드(Memo)뿐 아니라 할일 상세 내용처럼 같은 모양(text/noteType/checklistItems)의
+// 본문을 가진 어떤 데이터도 그릴 수 있도록, Memo 전체가 아니라 이 세 필드만 요구한다.
+export interface NoteContent {
+  text: string;
+  noteType?: 'text' | 'checklist';
+  checklistItems?: ChecklistItem[];
+}
 
 function FormattedText({ segments }: { segments: FormattedSegment[] }) {
   return (
@@ -27,7 +35,7 @@ function FormattedText({ segments }: { segments: FormattedSegment[] }) {
 }
 
 interface Props {
-  memo: Memo;
+  memo: NoteContent;
   onToggleItem?: (itemId: string) => void;
   textStyle?: StyleProp<TextStyle>;
   numberOfLines?: number;

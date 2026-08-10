@@ -15,14 +15,25 @@ import { NavigationProp, RouteProp, useFocusEffect, useNavigation, useRoute } fr
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { createItem, deleteItem, loadItems, updateItem } from '../storage/storage';
-import { STORAGE_KEYS, Todo } from '../types';
+import { ChecklistItem, STORAGE_KEYS, Todo } from '../types';
 import { colors } from '../theme/colors';
 import { useAuth } from '../auth/AuthContext';
 import { parseTags } from '../utils/tags';
 import { formatShortDate } from '../utils/date';
 import { getPendingTodoCompletions } from '../native/ReviewWidget';
+import MemoBody from '../components/MemoBody';
+import MemoImage from '../components/MemoImage';
+import NoteContentEditor from '../components/NoteContentEditor';
 import type { TabParamList } from '../navigation/TabNavigator';
 import appJson from '../../app.json';
+
+function hasTodoDetail(todo: Todo): boolean {
+  return (
+    !!todo.detailText?.trim() ||
+    (todo.detailChecklistItems?.length ?? 0) > 0 ||
+    (todo.detailImageUris?.length ?? 0) > 0
+  );
+}
 
 // Build-time flag for the login-free, phone-only variant — see CLAUDE.md.
 const IS_LOCAL_MODE = process.env.EXPO_PUBLIC_STORAGE_MODE === 'local';
@@ -47,6 +58,13 @@ export default function TodayScreen() {
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [detailEditorOpen, setDetailEditorOpen] = useState(false);
+  const [detailTodoId, setDetailTodoId] = useState<string | null>(null);
+  const [detailText, setDetailText] = useState('');
+  const [detailImageUris, setDetailImageUris] = useState<string[]>([]);
+  const [detailNoteType, setDetailNoteType] = useState<'text' | 'checklist'>('text');
+  const [detailChecklistItems, setDetailChecklistItems] = useState<ChecklistItem[]>([]);
 
   useFocusEffect(
     useCallback(() => {
@@ -106,6 +124,62 @@ export default function TodayScreen() {
       createItem(STORAGE_KEYS.TODOS, newTodo);
     }
     setFormOpen(false);
+  };
+
+  const toggleExpanded = (id: string) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const openDetailEditor = (todo: Todo) => {
+    setDetailTodoId(todo.id);
+    setDetailText(todo.detailText ?? '');
+    setDetailImageUris(todo.detailImageUris ?? []);
+    setDetailNoteType(todo.detailNoteType === 'checklist' ? 'checklist' : 'text');
+    setDetailChecklistItems(todo.detailChecklistItems ?? []);
+    setDetailEditorOpen(true);
+  };
+
+  const saveDetail = () => {
+    if (!detailTodoId) return;
+    const trimmedText = detailText.trim();
+    const trimmedItems = detailChecklistItems
+      .map((item) => ({ ...item, text: item.text.trim() }))
+      .filter((item) => item.text.length > 0);
+    const detail = {
+      detailText: trimmedText,
+      detailImageUris: detailImageUris.length > 0 ? detailImageUris : undefined,
+      detailNoteType,
+      detailChecklistItems: detailNoteType === 'checklist' ? trimmedItems : [],
+    };
+    const updated = todos.map((t) => (t.id === detailTodoId ? { ...t, ...detail } : t));
+    setTodos(updated);
+    const changed = updated.find((t) => t.id === detailTodoId);
+    if (changed) updateItem(STORAGE_KEYS.TODOS, changed);
+    setDetailEditorOpen(false);
+  };
+
+  const toggleDetailChecklistItem = (todoId: string, itemId: string) => {
+    const updated = todos.map((t) =>
+      t.id === todoId
+        ? {
+            ...t,
+            detailChecklistItems: (t.detailChecklistItems ?? []).map((item) =>
+              item.id === itemId ? { ...item, done: !item.done } : item
+            ),
+          }
+        : t
+    );
+    setTodos(updated);
+    const changed = updated.find((t) => t.id === todoId);
+    if (changed) updateItem(STORAGE_KEYS.TODOS, changed);
   };
 
   // 캘린더에서 특정 할일을 탭해 들어온 경우, 그 항목의 수정화면을 바로 연다.
@@ -244,59 +318,102 @@ export default function TodayScreen() {
             <Text style={styles.emptyText}>오늘 할 일을 추가해보세요</Text>
           </View>
         }
-        renderItem={({ item }) => (
-          <View style={styles.todoRow}>
-            <Pressable
-              style={styles.checkbox}
-              onPress={() => toggleTodo(item.id)}
-              hitSlop={8}
-            >
-              <Ionicons
-                name={item.done ? 'checkmark-circle' : 'ellipse-outline'}
-                size={24}
-                color={item.done ? colors.done : colors.subtext}
-              />
-            </Pressable>
-            <View style={styles.todoBody}>
-              <Text
-                style={[
-                  styles.todoText,
-                  item.done && styles.todoTextDone,
-                ]}
-              >
-                {item.title}
-              </Text>
-              <Text style={styles.todoMeta}>
-                작성 {formatShortDate(item.createdAt)}
-                {item.done && item.completedAt ? ` · 완료 ${formatShortDate(item.completedAt)}` : ''}
-              </Text>
-              {item.tags && item.tags.length > 0 && (
-                <View style={styles.todoTagRow}>
-                  {item.tags.map((tag) => (
-                    <View key={tag} style={styles.todoTagChip}>
-                      <Text style={styles.todoTagChipText}>{tag}</Text>
+        renderItem={({ item }) => {
+          const isExpanded = expandedIds.has(item.id);
+          const itemHasDetail = hasTodoDetail(item);
+          return (
+            <View style={styles.todoCard}>
+              <View style={styles.todoRow}>
+                <Pressable
+                  style={styles.checkbox}
+                  onPress={() => toggleTodo(item.id)}
+                  hitSlop={8}
+                >
+                  <Ionicons
+                    name={item.done ? 'checkmark-circle' : 'ellipse-outline'}
+                    size={24}
+                    color={item.done ? colors.done : colors.subtext}
+                  />
+                </Pressable>
+                <Pressable style={styles.todoBody} onPress={() => toggleExpanded(item.id)}>
+                  <View style={styles.todoTitleRow}>
+                    <Text
+                      style={[styles.todoText, item.done && styles.todoTextDone]}
+                    >
+                      {item.title}
+                    </Text>
+                    {itemHasDetail && (
+                      <Ionicons name="document-text-outline" size={14} color={colors.subtext} />
+                    )}
+                  </View>
+                  <Text style={styles.todoMeta}>
+                    작성 {formatShortDate(item.createdAt)}
+                    {item.done && item.completedAt ? ` · 완료 ${formatShortDate(item.completedAt)}` : ''}
+                  </Text>
+                  {item.tags && item.tags.length > 0 && (
+                    <View style={styles.todoTagRow}>
+                      {item.tags.map((tag) => (
+                        <View key={tag} style={styles.todoTagChip}>
+                          <Text style={styles.todoTagChipText}>{tag}</Text>
+                        </View>
+                      ))}
                     </View>
-                  ))}
+                  )}
+                </Pressable>
+                <View style={styles.todoActions}>
+                  <Pressable onPress={() => togglePinned(item.id)} hitSlop={8}>
+                    <Ionicons
+                      name={item.isPinned ? 'star' : 'star-outline'}
+                      size={20}
+                      color={item.isPinned ? colors.star : colors.subtext}
+                    />
+                  </Pressable>
+                  <Pressable onPress={() => openEditForm(item)} hitSlop={8}>
+                    <Ionicons name="pencil-outline" size={20} color={colors.subtext} />
+                  </Pressable>
+                  <Pressable onPress={() => deleteTodo(item.id)} hitSlop={8}>
+                    <Ionicons name="trash-outline" size={20} color={colors.subtext} />
+                  </Pressable>
+                </View>
+              </View>
+
+              {isExpanded && (
+                <View style={styles.todoDetailSection}>
+                  {itemHasDetail ? (
+                    <>
+                      {item.detailImageUris && item.detailImageUris.length > 0 && (
+                        <MemoImage uris={item.detailImageUris} maxHeight={220} />
+                      )}
+                      <MemoBody
+                        memo={{
+                          text: item.detailText ?? '',
+                          noteType: item.detailNoteType,
+                          checklistItems: item.detailChecklistItems,
+                        }}
+                        onToggleItem={(itemId) => toggleDetailChecklistItem(item.id, itemId)}
+                      />
+                    </>
+                  ) : (
+                    <Text style={styles.todoDetailEmptyText}>상세 내용이 없습니다</Text>
+                  )}
+                  <Pressable
+                    style={styles.detailEditButton}
+                    onPress={() => openDetailEditor(item)}
+                  >
+                    <Ionicons
+                      name={itemHasDetail ? 'create-outline' : 'add-circle-outline'}
+                      size={16}
+                      color={colors.primary}
+                    />
+                    <Text style={styles.detailEditButtonText}>
+                      {itemHasDetail ? '내용 수정' : '내용 추가'}
+                    </Text>
+                  </Pressable>
                 </View>
               )}
             </View>
-            <View style={styles.todoActions}>
-              <Pressable onPress={() => togglePinned(item.id)} hitSlop={8}>
-                <Ionicons
-                  name={item.isPinned ? 'star' : 'star-outline'}
-                  size={20}
-                  color={item.isPinned ? colors.star : colors.subtext}
-                />
-              </Pressable>
-              <Pressable onPress={() => openEditForm(item)} hitSlop={8}>
-                <Ionicons name="pencil-outline" size={20} color={colors.subtext} />
-              </Pressable>
-              <Pressable onPress={() => deleteTodo(item.id)} hitSlop={8}>
-                <Ionicons name="trash-outline" size={20} color={colors.subtext} />
-              </Pressable>
-            </View>
-          </View>
-        )}
+          );
+        }}
       />
 
       <Pressable style={styles.fab} onPress={openAddForm}>
@@ -338,6 +455,44 @@ export default function TodayScreen() {
               returnKeyType="done"
             />
           </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      <Modal
+        visible={detailEditorOpen}
+        animationType="slide"
+        onRequestClose={() => setDetailEditorOpen(false)}
+      >
+        <KeyboardAvoidingView
+          style={styles.detailComposer}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <View style={[styles.detailComposerHeader, { paddingTop: insets.top + 16 }]}>
+            <Pressable onPress={() => setDetailEditorOpen(false)}>
+              <Text style={styles.detailComposerCancel}>취소</Text>
+            </Pressable>
+            <Text style={styles.detailComposerTitle}>할 일 상세 내용</Text>
+            <Pressable onPress={saveDetail}>
+              <Text style={styles.detailComposerSave}>저장</Text>
+            </Pressable>
+          </View>
+          <ScrollView
+            style={styles.detailComposerScroll}
+            contentContainerStyle={styles.detailComposerScrollContent}
+            keyboardShouldPersistTaps="handled"
+          >
+            <NoteContentEditor
+              noteType={detailNoteType}
+              onNoteTypeChange={setDetailNoteType}
+              text={detailText}
+              onTextChange={setDetailText}
+              checklistItems={detailChecklistItems}
+              onChecklistItemsChange={setDetailChecklistItems}
+              imageUris={detailImageUris}
+              onImageUrisChange={setDetailImageUris}
+              active={detailEditorOpen}
+            />
+          </ScrollView>
         </KeyboardAvoidingView>
       </Modal>
     </KeyboardAvoidingView>
@@ -445,14 +600,16 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '600',
   },
-  todoRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
+  todoCard: {
     backgroundColor: colors.card,
     borderRadius: 12,
     paddingVertical: 14,
     paddingHorizontal: 14,
     marginBottom: 10,
+  },
+  todoRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
     gap: 12,
   },
   checkbox: {
@@ -460,6 +617,11 @@ const styles = StyleSheet.create({
   },
   todoBody: {
     flex: 1,
+  },
+  todoTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   todoText: {
     fontSize: 16,
@@ -494,6 +656,27 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 14,
     paddingTop: 2,
+  },
+  todoDetailSection: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  todoDetailEmptyText: {
+    fontSize: 13,
+    color: colors.subtext,
+  },
+  detailEditButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 10,
+  },
+  detailEditButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.primary,
   },
   fab: {
     position: 'absolute',
@@ -560,5 +743,40 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     fontSize: 13,
     color: colors.text,
+  },
+  detailComposer: {
+    flex: 1,
+    backgroundColor: colors.card,
+  },
+  detailComposerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingBottom: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  detailComposerCancel: {
+    fontSize: 16,
+    color: colors.subtext,
+  },
+  detailComposerTitle: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  detailComposerSave: {
+    fontSize: 16,
+    color: colors.primary,
+    fontWeight: '600',
+  },
+  detailComposerScroll: {
+    flex: 1,
+  },
+  detailComposerScrollContent: {
+    paddingHorizontal: 20,
+    paddingTop: 14,
+    paddingBottom: 24,
   },
 });

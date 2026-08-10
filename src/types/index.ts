@@ -1,3 +1,9 @@
+export interface ChecklistItem {
+  id: string;
+  text: string;
+  done: boolean;
+}
+
 export interface Todo {
   id: string;
   title: string;
@@ -6,12 +12,12 @@ export interface Todo {
   completedAt?: number;
   tags?: string[];
   isPinned?: boolean;
-}
-
-export interface ChecklistItem {
-  id: string;
-  text: string;
-  done: boolean;
+  // 지식창고 글쓰기 UI를 그대로 재사용하는 할일 상세 내용. 지식창고(memos)에는 절대
+  // 나타나지 않고 이 할일에만 붙어 있음 — MemoryPalaceScreen/spacedRepetition 대상이 아님.
+  detailText?: string;
+  detailImageUris?: string[];
+  detailNoteType?: 'text' | 'checklist';
+  detailChecklistItems?: ChecklistItem[];
 }
 
 export interface Memo {

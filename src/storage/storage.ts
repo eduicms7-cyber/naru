@@ -29,6 +29,10 @@ function rowToTodo(row: any): Todo {
     completedAt: row.completed_at ?? undefined,
     tags: row.tags ?? undefined,
     isPinned: row.is_pinned ?? undefined,
+    detailText: row.detail_text ?? undefined,
+    detailImageUris: row.detail_image_uris ?? undefined,
+    detailNoteType: row.detail_note_type ?? undefined,
+    detailChecklistItems: row.detail_checklist_items ?? undefined,
   };
 }
 
@@ -42,6 +46,10 @@ function todoToRow(item: Todo, userId: string) {
     completed_at: item.completedAt ?? null,
     tags: item.tags ?? [],
     is_pinned: item.isPinned ?? false,
+    detail_text: item.detailText ?? null,
+    detail_image_uris: item.detailImageUris ?? [],
+    detail_note_type: item.detailNoteType ?? 'text',
+    detail_checklist_items: item.detailChecklistItems ?? [],
   };
 }
 
@@ -189,8 +197,11 @@ async function ensureUploadedImages(uris: string[] | undefined, userId: string):
 // Memos need the async image upload above; todos/schedules convert synchronously.
 async function buildRow<T>(table: TableName, item: T, userId: string): Promise<any> {
   switch (table) {
-    case STORAGE_KEYS.TODOS:
-      return todoToRow(item as unknown as Todo, userId);
+    case STORAGE_KEYS.TODOS: {
+      const todoItem = item as unknown as Todo;
+      const detailImageUris = await ensureUploadedImages(todoItem.detailImageUris, userId);
+      return todoToRow({ ...todoItem, detailImageUris }, userId);
+    }
     case STORAGE_KEYS.SCHEDULES:
       return scheduleToRow(item as unknown as ScheduleEvent, userId);
     case STORAGE_KEYS.FAVORITES:
