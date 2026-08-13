@@ -26,3 +26,19 @@ export const cardColors = [
   '#FFE5D4',
   '#DCEEEE',
 ];
+
+// 오늘 탭 할일 카드 배경 — 기한 임박도/완료 여부에 따라 아래 opacity를 곱해 rgba로 씀.
+export const todoCardColors = {
+  dueDate: '#FF8FA3', // 기한 있음: 핑크 계열, 기한이 가까울수록 진하게(1.0) ~ 멀수록 옅게
+  noDueDate: '#4CAF50', // 기한 없음: 녹색, 50%
+  done: '#4FC3F7', // 완료: 하늘색, 50%
+};
+
+export function withOpacity(hex: string, opacity: number): string {
+  const clamped = Math.min(1, Math.max(0, opacity));
+  const value = parseInt(hex.replace('#', ''), 16);
+  const r = (value >> 16) & 255;
+  const g = (value >> 8) & 255;
+  const b = value & 255;
+  return `rgba(${r}, ${g}, ${b}, ${clamped})`;
+}

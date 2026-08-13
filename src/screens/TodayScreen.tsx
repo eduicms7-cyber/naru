@@ -16,7 +16,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { createItem, deleteItem, loadItems, updateItem } from '../storage/storage';
 import { ChecklistItem, STORAGE_KEYS, Todo } from '../types';
-import { colors } from '../theme/colors';
+import { colors, todoCardColors, withOpacity } from '../theme/colors';
 import { useAuth } from '../auth/AuthContext';
 import { parseTags } from '../utils/tags';
 import { formatDateKeyShort, formatShortDate, getMonthMatrix, toDateKey, WEEKDAY_LABELS } from '../utils/date';
@@ -33,6 +33,21 @@ function hasTodoDetail(todo: Todo): boolean {
     (todo.detailChecklistItems?.length ?? 0) > 0 ||
     (todo.detailImageUris?.length ?? 0) > 0
   );
+}
+
+function daysUntilDue(dueDate: string, todayKey: string): number {
+  const due = new Date(`${dueDate}T00:00:00`);
+  const today = new Date(`${todayKey}T00:00:00`);
+  return Math.round((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+// 완료: 하늘색 50%. 기한 없음: 녹색 50%. 기한 있음: 핑크, 오늘(또는 지난 기한)이 원색(100%)이고
+// 남은 날짜가 하루씩 늘어날 때마다 10%씩 옅어진다(같은 날짜면 항상 같은 투명도).
+function todoCardBackground(todo: Todo, todayKey: string): string {
+  if (todo.done) return withOpacity(todoCardColors.done, 0.5);
+  if (!todo.dueDate) return withOpacity(todoCardColors.noDueDate, 0.5);
+  const daysLeft = Math.max(0, daysUntilDue(todo.dueDate, todayKey));
+  return withOpacity(todoCardColors.dueDate, 1 - daysLeft * 0.1);
 }
 
 // Build-time flag for the login-free, phone-only variant — see CLAUDE.md.
@@ -352,7 +367,7 @@ export default function TodayScreen() {
           const isExpanded = expandedIds.has(item.id);
           const itemHasDetail = hasTodoDetail(item);
           return (
-            <View style={styles.todoCard}>
+            <View style={[styles.todoCard, { backgroundColor: todoCardBackground(item, todayKey) }]}>
               <View style={styles.todoRow}>
                 <Pressable
                   style={styles.checkbox}
