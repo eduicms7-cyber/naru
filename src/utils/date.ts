@@ -28,3 +28,9 @@ export function formatShortDate(timestamp: number): string {
   const d = new Date(timestamp);
   return `${d.getMonth() + 1}월 ${d.getDate()}일`;
 }
+
+// dateKey: YYYY-MM-DD (toDateKey 결과)
+export function formatDateKeyShort(dateKey: string): string {
+  const [, m, d] = dateKey.split('-').map(Number);
+  return `${m}월 ${d}일`;
+}

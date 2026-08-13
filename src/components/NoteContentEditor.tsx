@@ -55,6 +55,8 @@ export default function NoteContentEditor({
 }: Props) {
   const [textSelection, setTextSelection] = useState({ start: 0, end: 0 });
   const inputRef = useRef<TextInput>(null);
+  const dropZoneRef = useRef<View>(null);
+  const [dragActive, setDragActive] = useState(false);
 
   // 웹에서만 가능: RN TextInput은 onPaste를 지원하지 않고 react-native-web도 이 prop을
   // 전달하지 않으므로, 웹에서 렌더링되는 실제 DOM 노드에 직접 paste 리스너를 붙인다.
@@ -77,6 +79,37 @@ export default function NoteContentEditor({
     };
     node.addEventListener('paste', handlePaste as EventListener);
     return () => node.removeEventListener('paste', handlePaste as EventListener);
+  }, [active, imageUris, onImageUrisChange]);
+
+  // 웹에서만: 파일 탐색기에서 이미지를 드래그해 편집기 위에 놓으면 첨부한다.
+  // blob: URL은 storage.ts의 ensureUploadedImage가 그대로 fetch해서 업로드할 수 있다.
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !active) return;
+    const node = dropZoneRef.current as unknown as HTMLElement | null;
+    if (!node) return;
+    const handleDragOver = (e: DragEvent) => {
+      e.preventDefault();
+      setDragActive(true);
+    };
+    const handleDragLeave = () => setDragActive(false);
+    const handleDrop = (e: DragEvent) => {
+      e.preventDefault();
+      setDragActive(false);
+      const files = Array.from(e.dataTransfer?.files ?? []).filter((file) =>
+        file.type.startsWith('image/')
+      );
+      if (files.length === 0) return;
+      const uris = files.map((file) => URL.createObjectURL(file));
+      onImageUrisChange([...imageUris, ...uris]);
+    };
+    node.addEventListener('dragover', handleDragOver);
+    node.addEventListener('dragleave', handleDragLeave);
+    node.addEventListener('drop', handleDrop);
+    return () => {
+      node.removeEventListener('dragover', handleDragOver);
+      node.removeEventListener('dragleave', handleDragLeave);
+      node.removeEventListener('drop', handleDrop);
+    };
   }, [active, imageUris, onImageUrisChange]);
 
   const wrapSelection = (marker: string) => {
@@ -163,7 +196,13 @@ export default function NoteContentEditor({
   };
 
   return (
-    <View>
+    <View ref={dropZoneRef} style={dragActive && styles.dropZoneActive}>
+      {dragActive && (
+        <View style={styles.dropOverlay} pointerEvents="none">
+          <Ionicons name="image-outline" size={28} color={colors.primary} />
+          <Text style={styles.dropOverlayText}>여기에 이미지를 놓으세요</Text>
+        </View>
+      )}
       <View style={styles.modeToggleRow}>
         <Pressable
           style={[styles.modeToggleButton, noteType === 'text' && styles.modeToggleButtonActive]}
@@ -282,6 +321,32 @@ export default function NoteContentEditor({
 }
 
 const styles = StyleSheet.create({
+  dropZoneActive: {
+    position: 'relative',
+    backgroundColor: '#EAF1FF',
+    borderRadius: 12,
+  },
+  dropOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(234,241,255,0.9)',
+    borderWidth: 2,
+    borderColor: colors.primary,
+    borderStyle: 'dashed',
+    borderRadius: 12,
+  },
+  dropOverlayText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.primary,
+  },
   modeToggleRow: {
     flexDirection: 'row',
     gap: 8,

@@ -19,7 +19,7 @@ import { ChecklistItem, STORAGE_KEYS, Todo } from '../types';
 import { colors } from '../theme/colors';
 import { useAuth } from '../auth/AuthContext';
 import { parseTags } from '../utils/tags';
-import { formatShortDate } from '../utils/date';
+import { formatDateKeyShort, formatShortDate, getMonthMatrix, toDateKey, WEEKDAY_LABELS } from '../utils/date';
 import { getPendingTodoCompletions } from '../native/ReviewWidget';
 import MemoBody from '../components/MemoBody';
 import MemoImage from '../components/MemoImage';
@@ -58,6 +58,10 @@ export default function TodayScreen() {
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [dueDate, setDueDate] = useState<string | null>(null);
+  const [datePickerOpen, setDatePickerOpen] = useState(false);
+  const [pickerYear, setPickerYear] = useState(() => new Date().getFullYear());
+  const [pickerMonth, setPickerMonth] = useState(() => new Date().getMonth());
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [detailEditorOpen, setDetailEditorOpen] = useState(false);
   const [detailTodoId, setDetailTodoId] = useState<string | null>(null);
@@ -89,10 +93,19 @@ export default function TodayScreen() {
     }, [])
   );
 
+  const resetDatePicker = (baseDate: string | null) => {
+    const base = baseDate ? new Date(`${baseDate}T00:00:00`) : new Date();
+    setPickerYear(base.getFullYear());
+    setPickerMonth(base.getMonth());
+    setDatePickerOpen(false);
+  };
+
   const openAddForm = () => {
     setEditingId(null);
     setInput('');
     setTagsInput('');
+    setDueDate(null);
+    resetDatePicker(null);
     setFormOpen(true);
   };
 
@@ -100,7 +113,15 @@ export default function TodayScreen() {
     setEditingId(todo.id);
     setInput(todo.title);
     setTagsInput((todo.tags ?? []).join(', '));
+    setDueDate(todo.dueDate ?? null);
+    resetDatePicker(todo.dueDate ?? null);
     setFormOpen(true);
+  };
+
+  const shiftPickerMonth = (delta: number) => {
+    const next = new Date(pickerYear, pickerMonth + delta, 1);
+    setPickerYear(next.getFullYear());
+    setPickerMonth(next.getMonth());
   };
 
   const saveTodo = () => {
@@ -108,7 +129,9 @@ export default function TodayScreen() {
     if (!title) return;
     const tags = parseTags(tagsInput);
     if (editingId) {
-      const updated = todos.map((t) => (t.id === editingId ? { ...t, title, tags } : t));
+      const updated = todos.map((t) =>
+        t.id === editingId ? { ...t, title, tags, dueDate: dueDate ?? undefined } : t
+      );
       setTodos(updated);
       const changed = updated.find((t) => t.id === editingId);
       if (changed) updateItem(STORAGE_KEYS.TODOS, changed);
@@ -119,6 +142,7 @@ export default function TodayScreen() {
         done: false,
         createdAt: Date.now(),
         tags,
+        dueDate: dueDate ?? undefined,
       };
       setTodos([newTodo, ...todos]);
       createItem(STORAGE_KEYS.TODOS, newTodo);
@@ -225,21 +249,27 @@ export default function TodayScreen() {
   const visibleTodos = useMemo(() => {
     const filtered = selectedTag ? todos.filter((t) => t.tags?.includes(selectedTag)) : todos;
     // 별표(고정) 항목이 공지처럼 무조건 맨 위, 그 다음 미완료 → 완료 순.
-    // 같은 그룹 안에서는 미완료는 작성일 내림차순, 완료는 완료일 내림차순으로 정렬.
+    // 미완료 항목 안에서는 기한이 빠른 순 → 기한 없음(작성일 내림차순) 순으로,
+    // 완료 항목은 완료일 내림차순으로 정렬.
     return [...filtered].sort((a, b) => {
       const pinnedDiff = Number(!!b.isPinned) - Number(!!a.isPinned);
       if (pinnedDiff !== 0) return pinnedDiff;
       const doneDiff = Number(a.done) - Number(b.done);
       if (doneDiff !== 0) return doneDiff;
-      return a.done
-        ? (b.completedAt ?? 0) - (a.completedAt ?? 0)
-        : b.createdAt - a.createdAt;
+      if (!a.done) {
+        if (a.dueDate && b.dueDate) return a.dueDate.localeCompare(b.dueDate);
+        if (a.dueDate) return -1;
+        if (b.dueDate) return 1;
+        return b.createdAt - a.createdAt;
+      }
+      return (b.completedAt ?? 0) - (a.completedAt ?? 0);
     });
   }, [todos, selectedTag]);
 
   if (!loaded) return <View style={styles.container} />;
 
   const doneCount = todos.filter((t) => t.done).length;
+  const todayKey = toDateKey(new Date());
 
   return (
     <KeyboardAvoidingView
@@ -349,6 +379,11 @@ export default function TodayScreen() {
                   <Text style={styles.todoMeta}>
                     작성 {formatShortDate(item.createdAt)}
                     {item.done && item.completedAt ? ` · 완료 ${formatShortDate(item.completedAt)}` : ''}
+                    {!item.done && item.dueDate ? (
+                      <Text style={item.dueDate < todayKey ? styles.dueDateOverdue : styles.dueDateText}>
+                        {` · 기한 ${formatDateKeyShort(item.dueDate)}`}
+                      </Text>
+                    ) : null}
                   </Text>
                   {item.tags && item.tags.length > 0 && (
                     <View style={styles.todoTagRow}>
@@ -454,6 +489,76 @@ export default function TodayScreen() {
               onSubmitEditing={saveTodo}
               returnKeyType="done"
             />
+
+            <Pressable style={styles.dueDateRow} onPress={() => setDatePickerOpen((v) => !v)}>
+              <Ionicons name="calendar-outline" size={16} color={colors.subtext} />
+              <Text style={styles.dueDateRowText}>
+                {dueDate ? `기한 ${formatDateKeyShort(dueDate)}` : '기한 설정 (선택)'}
+              </Text>
+              {dueDate && (
+                <Pressable onPress={() => setDueDate(null)} hitSlop={8}>
+                  <Ionicons name="close-circle" size={16} color={colors.subtext} />
+                </Pressable>
+              )}
+            </Pressable>
+
+            {datePickerOpen && (
+              <View style={styles.datePicker}>
+                <View style={styles.datePickerNav}>
+                  <Pressable onPress={() => shiftPickerMonth(-1)} hitSlop={8}>
+                    <Ionicons name="chevron-back" size={18} color={colors.text} />
+                  </Pressable>
+                  <Text style={styles.datePickerMonthLabel}>
+                    {pickerYear}년 {pickerMonth + 1}월
+                  </Text>
+                  <Pressable onPress={() => shiftPickerMonth(1)} hitSlop={8}>
+                    <Ionicons name="chevron-forward" size={18} color={colors.text} />
+                  </Pressable>
+                </View>
+                <View style={styles.datePickerWeekRow}>
+                  {WEEKDAY_LABELS.map((label) => (
+                    <Text key={label} style={styles.datePickerWeekLabel}>
+                      {label}
+                    </Text>
+                  ))}
+                </View>
+                {getMonthMatrix(pickerYear, pickerMonth).map((week, wi) => (
+                  <View key={wi} style={styles.datePickerWeekRow}>
+                    {week.map((date, di) => {
+                      if (!date) return <View key={di} style={styles.datePickerDayCell} />;
+                      const key = toDateKey(date);
+                      const selected = key === dueDate;
+                      return (
+                        <Pressable
+                          key={di}
+                          style={styles.datePickerDayCell}
+                          onPress={() => {
+                            setDueDate(key);
+                            setDatePickerOpen(false);
+                          }}
+                        >
+                          <View
+                            style={[
+                              styles.datePickerDayCircle,
+                              selected && styles.datePickerDayCircleSelected,
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.datePickerDayText,
+                                selected && styles.datePickerDayTextSelected,
+                              ]}
+                            >
+                              {date.getDate()}
+                            </Text>
+                          </View>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                ))}
+              </View>
+            )}
           </View>
         </KeyboardAvoidingView>
       </Modal>
@@ -743,6 +848,78 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     fontSize: 13,
     color: colors.text,
+  },
+  dueDateText: {
+    color: colors.primary,
+  },
+  dueDateOverdue: {
+    color: colors.danger,
+  },
+  dueDateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: colors.background,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  dueDateRowText: {
+    flex: 1,
+    fontSize: 13,
+    color: colors.text,
+  },
+  datePicker: {
+    backgroundColor: colors.background,
+    borderRadius: 10,
+    padding: 10,
+  },
+  datePickerNav: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 20,
+    paddingBottom: 8,
+  },
+  datePickerMonthLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text,
+    minWidth: 90,
+    textAlign: 'center',
+  },
+  datePickerWeekRow: {
+    flexDirection: 'row',
+  },
+  datePickerWeekLabel: {
+    flex: 1,
+    textAlign: 'center',
+    fontSize: 11,
+    color: colors.subtext,
+    paddingVertical: 4,
+  },
+  datePickerDayCell: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 2,
+  },
+  datePickerDayCircle: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  datePickerDayCircleSelected: {
+    backgroundColor: colors.primary,
+  },
+  datePickerDayText: {
+    fontSize: 13,
+    color: colors.text,
+  },
+  datePickerDayTextSelected: {
+    color: '#FFFFFF',
+    fontWeight: '600',
   },
   detailComposer: {
     flex: 1,

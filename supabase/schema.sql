@@ -10,6 +10,7 @@ create table if not exists todos (
   completed_at bigint,
   tags text[] not null default '{}',
   is_pinned boolean not null default false,
+  due_date text,
   detail_text text,
   detail_image_uris text[] not null default '{}',
   detail_note_type text not null default 'text',
@@ -43,6 +44,7 @@ create table if not exists memos (
 -- alter table todos add column if not exists completed_at bigint;
 -- alter table todos add column if not exists tags text[] not null default '{}';
 -- alter table todos add column if not exists is_pinned boolean not null default false;
+-- alter table todos add column if not exists due_date text;
 
 -- 할일 상세 내용(지식창고 글쓰기 UI 재사용, memos와는 무관한 별도 컬럼) 추가:
 -- alter table todos add column if not exists detail_text text;
