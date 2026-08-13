@@ -41,13 +41,13 @@ function daysUntilDue(dueDate: string, todayKey: string): number {
   return Math.round((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 }
 
-// 완료: 하늘색 50%. 기한 없음: 녹색 50%. 기한 있음: 핑크, 오늘(또는 지난 기한)이 원색(100%)이고
+// 완료: 하늘색 30%. 기한 없음: 녹색 30%. 기한 있음: 핑크, 오늘(또는 지난 기한)이 50%이고
 // 남은 날짜가 하루씩 늘어날 때마다 10%씩 옅어진다(같은 날짜면 항상 같은 투명도).
 function todoCardBackground(todo: Todo, todayKey: string): string {
-  if (todo.done) return withOpacity(todoCardColors.done, 0.5);
-  if (!todo.dueDate) return withOpacity(todoCardColors.noDueDate, 0.5);
+  if (todo.done) return withOpacity(todoCardColors.done, 0.3);
+  if (!todo.dueDate) return withOpacity(todoCardColors.noDueDate, 0.3);
   const daysLeft = Math.max(0, daysUntilDue(todo.dueDate, todayKey));
-  return withOpacity(todoCardColors.dueDate, 1 - daysLeft * 0.1);
+  return withOpacity(todoCardColors.dueDate, 0.5 - daysLeft * 0.1);
 }
 
 // Build-time flag for the login-free, phone-only variant — see CLAUDE.md.
