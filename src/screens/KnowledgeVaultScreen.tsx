@@ -9,6 +9,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { NavigationProp, RouteProp, useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
@@ -37,7 +38,7 @@ import NoteContentEditor from '../components/NoteContentEditor';
 import { showAlert } from '../utils/alert';
 import MemoryPalaceScreen from './MemoryPalaceScreen';
 import ResponsiveScreenContainer from '../components/ResponsiveScreenContainer';
-import { useIsWideLayout } from '../utils/layout';
+import { SIDEBAR_WIDTH, useIsWideLayout } from '../utils/layout';
 import type { TabParamList } from '../navigation/TabNavigator';
 
 function formatDate(timestamp: number): string {
@@ -49,9 +50,18 @@ function formatDate(timestamp: number): string {
   ).padStart(2, '0')}`;
 }
 
+// 카드가 이보다 좁아지면 본문/태그/하단 액션이 답답해 보여서 열 개수의 하한선으로 쓴다.
+const GRID_CARD_MIN_WIDTH = 300;
+// listContent의 좌우 paddingHorizontal(20) 합.
+const GRID_CONTENT_PADDING = 40;
+
 export default function KnowledgeVaultScreen() {
   const isWide = useIsWideLayout();
-  const numColumns = isWide ? 2 : 1;
+  const { width: windowWidth } = useWindowDimensions();
+  // 지식창고는 폭 제한 없이 화면 전체를 쓰므로(ResponsiveScreenContainer maxWidth="none"),
+  // 실제 카드가 놓일 가용폭(사이드바 폭 제외)을 기준으로 열 개수를 계산한다.
+  const contentWidth = isWide ? windowWidth - SIDEBAR_WIDTH - GRID_CONTENT_PADDING : windowWidth;
+  const numColumns = isWide ? Math.max(2, Math.floor(contentWidth / GRID_CARD_MIN_WIDTH)) : 1;
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<NavigationProp<TabParamList>>();
   const route = useRoute<RouteProp<TabParamList, '지식창고'>>();
@@ -312,7 +322,7 @@ export default function KnowledgeVaultScreen() {
   if (!loaded) return <View style={styles.container} />;
 
   return (
-    <ResponsiveScreenContainer>
+    <ResponsiveScreenContainer maxWidth="none">
     <View style={styles.container}>
       <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
         <Text style={styles.title}>지식창고</Text>
@@ -382,7 +392,7 @@ export default function KnowledgeVaultScreen() {
             <Pressable
               style={[
                 styles.memoCard,
-                numColumns > 1 && styles.memoCardGrid,
+                numColumns > 1 && { width: `${100 / numColumns - 2}%` },
                 item.color ? { backgroundColor: item.color } : null,
               ]}
               onPress={() => toggleExpanded(item.id)}
@@ -618,9 +628,6 @@ const styles = StyleSheet.create({
   },
   gridRow: {
     justifyContent: 'space-between',
-  },
-  memoCardGrid: {
-    width: '48%',
   },
   memoText: {
     fontSize: 15,

@@ -11,6 +11,7 @@ import FavoriteIcon from '../components/FavoriteIcon';
 import FavoriteFormModal from '../components/FavoriteFormModal';
 import FavoriteRowMenu from '../components/FavoriteRowMenu';
 import { ICONS, TabParamList } from './tabConfig';
+import { SIDEBAR_WIDTH } from '../utils/layout';
 
 // 사이드바에 직접 내비 버튼으로 노출할 라우트만(즐겨찾기는 사이드바 패널이 완전히 대체).
 const NAV_ROUTE_NAMES: (keyof TabParamList)[] = ['오늘', '지식창고', '캘린더'];
@@ -165,7 +166,7 @@ export default function SidebarTabBar({ state, descriptors, navigation, insets }
 
 const styles = StyleSheet.create({
   sidebar: {
-    width: 260,
+    width: SIDEBAR_WIDTH,
     backgroundColor: colors.card,
     borderRightWidth: 1,
     borderRightColor: colors.border,

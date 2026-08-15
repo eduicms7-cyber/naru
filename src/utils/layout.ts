@@ -5,6 +5,10 @@ import { useWindowDimensions } from 'react-native';
 // 공유해야 두 전환 시점이 어긋나지 않는다.
 export const WIDE_BREAKPOINT = 900;
 
+// SidebarTabBar의 고정 폭. 그리드 열 개수 계산(콘텐츠 실제 가용폭 = 창 폭 - 이 값)에도
+// 같이 쓰이므로 사이드바 스타일과 별개로 여기서 공유한다.
+export const SIDEBAR_WIDTH = 260;
+
 export function useIsWideLayout(): boolean {
   const { width } = useWindowDimensions();
   return width >= WIDE_BREAKPOINT;
