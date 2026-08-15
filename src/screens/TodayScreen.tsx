@@ -24,6 +24,7 @@ import { getPendingTodoCompletions } from '../native/ReviewWidget';
 import MemoBody from '../components/MemoBody';
 import MemoImage from '../components/MemoImage';
 import NoteContentEditor from '../components/NoteContentEditor';
+import ResponsiveScreenContainer from '../components/ResponsiveScreenContainer';
 import type { TabParamList } from '../navigation/TabNavigator';
 import appJson from '../../app.json';
 
@@ -287,6 +288,7 @@ export default function TodayScreen() {
   const todayKey = toDateKey(new Date());
 
   return (
+    <ResponsiveScreenContainer>
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -616,6 +618,7 @@ export default function TodayScreen() {
         </KeyboardAvoidingView>
       </Modal>
     </KeyboardAvoidingView>
+    </ResponsiveScreenContainer>
   );
 }
 

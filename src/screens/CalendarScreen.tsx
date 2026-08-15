@@ -17,6 +17,7 @@ import { Memo, STORAGE_KEYS, ScheduleEvent, Todo } from '../types';
 import { colors } from '../theme/colors';
 import { getMonthMatrix, toDateKey, WEEKDAY_LABELS } from '../utils/date';
 import { memoSummaryText } from '../utils/richText';
+import ResponsiveScreenContainer from '../components/ResponsiveScreenContainer';
 import type { TabParamList } from '../navigation/TabNavigator';
 
 type AgendaEntry =
@@ -146,6 +147,7 @@ export default function CalendarScreen() {
   const [selYear, selMonth, selDay] = selectedKey.split('-').map(Number);
 
   return (
+    <ResponsiveScreenContainer>
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -303,6 +305,7 @@ export default function CalendarScreen() {
         </Pressable>
       </View>
     </KeyboardAvoidingView>
+    </ResponsiveScreenContainer>
   );
 }
 

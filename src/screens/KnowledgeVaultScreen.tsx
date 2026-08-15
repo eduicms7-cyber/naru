@@ -36,6 +36,7 @@ import MemoImage from '../components/MemoImage';
 import NoteContentEditor from '../components/NoteContentEditor';
 import { showAlert } from '../utils/alert';
 import MemoryPalaceScreen from './MemoryPalaceScreen';
+import ResponsiveScreenContainer from '../components/ResponsiveScreenContainer';
 import type { TabParamList } from '../navigation/TabNavigator';
 
 function formatDate(timestamp: number): string {
@@ -308,6 +309,7 @@ export default function KnowledgeVaultScreen() {
   if (!loaded) return <View style={styles.container} />;
 
   return (
+    <ResponsiveScreenContainer>
     <View style={styles.container}>
       <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
         <Text style={styles.title}>지식창고</Text>
@@ -500,6 +502,7 @@ export default function KnowledgeVaultScreen() {
         onClose={() => setPalaceOpen(false)}
       />
     </View>
+    </ResponsiveScreenContainer>
   );
 }
 

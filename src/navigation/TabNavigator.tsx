@@ -6,28 +6,23 @@ import KnowledgeVaultScreen from '../screens/KnowledgeVaultScreen';
 import CalendarScreen from '../screens/CalendarScreen';
 import FavoritesScreen from '../screens/FavoritesScreen';
 import { colors } from '../theme/colors';
+import { useIsWideLayout } from '../utils/layout';
+import SidebarTabBar from './SidebarTabBar';
+import { ICONS, TabParamList } from './tabConfig';
 
-export type TabParamList = {
-  오늘: { focusTodoId?: string } | undefined;
-  지식창고: { focusMemoId?: string } | undefined;
-  캘린더: undefined;
-  즐겨찾기: undefined;
-};
+export type { TabParamList };
 
 const Tab = createBottomTabNavigator<TabParamList>();
 
-const ICONS: Record<keyof TabParamList, keyof typeof Ionicons.glyphMap> = {
-  오늘: 'today-outline',
-  지식창고: 'library-outline',
-  캘린더: 'calendar-outline',
-  즐겨찾기: 'star-outline',
-};
-
 export default function TabNavigator() {
+  const isWide = useIsWideLayout();
+
   return (
     <Tab.Navigator
+      tabBar={isWide ? (props) => <SidebarTabBar {...props} /> : undefined}
       screenOptions={({ route }) => ({
         headerShown: false,
+        tabBarPosition: isWide ? 'left' : 'bottom',
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.subtext,
         tabBarStyle: {
