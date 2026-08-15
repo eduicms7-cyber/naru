@@ -37,6 +37,7 @@ import NoteContentEditor from '../components/NoteContentEditor';
 import { showAlert } from '../utils/alert';
 import MemoryPalaceScreen from './MemoryPalaceScreen';
 import ResponsiveScreenContainer from '../components/ResponsiveScreenContainer';
+import { useIsWideLayout } from '../utils/layout';
 import type { TabParamList } from '../navigation/TabNavigator';
 
 function formatDate(timestamp: number): string {
@@ -49,6 +50,8 @@ function formatDate(timestamp: number): string {
 }
 
 export default function KnowledgeVaultScreen() {
+  const isWide = useIsWideLayout();
+  const numColumns = isWide ? 2 : 1;
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<NavigationProp<TabParamList>>();
   const route = useRoute<RouteProp<TabParamList, '지식창고'>>();
@@ -363,6 +366,9 @@ export default function KnowledgeVaultScreen() {
 
       <FlatList
         data={visibleMemos}
+        key={numColumns}
+        numColumns={numColumns}
+        columnWrapperStyle={numColumns > 1 ? styles.gridRow : undefined}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}
         ListEmptyComponent={
@@ -374,7 +380,11 @@ export default function KnowledgeVaultScreen() {
           const isExpanded = expandedIds.has(item.id);
           return (
             <Pressable
-              style={[styles.memoCard, item.color ? { backgroundColor: item.color } : null]}
+              style={[
+                styles.memoCard,
+                numColumns > 1 && styles.memoCardGrid,
+                item.color ? { backgroundColor: item.color } : null,
+              ]}
               onPress={() => toggleExpanded(item.id)}
             >
               {item.imageUris && item.imageUris.length > 0 && (
@@ -605,6 +615,12 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 14,
     marginBottom: 10,
+  },
+  gridRow: {
+    justifyContent: 'space-between',
+  },
+  memoCardGrid: {
+    width: '48%',
   },
   memoText: {
     fontSize: 15,

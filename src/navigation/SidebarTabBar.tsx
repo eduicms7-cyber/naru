@@ -5,6 +5,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import { useFavorites } from '../hooks/useFavorites';
+import { useAuth } from '../auth/AuthContext';
 import { Favorite } from '../types';
 import FavoriteIcon from '../components/FavoriteIcon';
 import FavoriteFormModal from '../components/FavoriteFormModal';
@@ -14,7 +15,10 @@ import { ICONS, TabParamList } from './tabConfig';
 // 사이드바에 직접 내비 버튼으로 노출할 라우트만(즐겨찾기는 사이드바 패널이 완전히 대체).
 const NAV_ROUTE_NAMES: (keyof TabParamList)[] = ['오늘', '지식창고', '캘린더'];
 
+const IS_LOCAL_MODE = process.env.EXPO_PUBLIC_STORAGE_MODE === 'local';
+
 export default function SidebarTabBar({ state, descriptors, navigation, insets }: BottomTabBarProps) {
+  const { signOut } = useAuth();
   const { favorites, load, add, update, remove, swapOrder } = useFavorites();
   const [formOpen, setFormOpen] = useState(false);
   const [formMode, setFormMode] = useState<'add' | 'edit'>('add');
@@ -119,6 +123,13 @@ export default function SidebarTabBar({ state, descriptors, navigation, insets }
           </View>
         )}
       />
+
+      {!IS_LOCAL_MODE && (
+        <Pressable style={styles.logoutButton} onPress={signOut} hitSlop={8}>
+          <Ionicons name="log-out-outline" size={18} color={colors.subtext} />
+          <Text style={styles.logoutLabel}>로그아웃</Text>
+        </Pressable>
+      )}
 
       <FavoriteFormModal
         visible={formOpen}
@@ -227,5 +238,18 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 14,
     color: colors.text,
+  },
+  logoutButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  logoutLabel: {
+    fontSize: 14,
+    color: colors.subtext,
   },
 });

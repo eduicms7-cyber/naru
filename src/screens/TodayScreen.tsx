@@ -25,6 +25,7 @@ import MemoBody from '../components/MemoBody';
 import MemoImage from '../components/MemoImage';
 import NoteContentEditor from '../components/NoteContentEditor';
 import ResponsiveScreenContainer from '../components/ResponsiveScreenContainer';
+import { useIsWideLayout } from '../utils/layout';
 import type { TabParamList } from '../navigation/TabNavigator';
 import appJson from '../../app.json';
 
@@ -64,6 +65,7 @@ function formatTodayLabel(): string {
 
 export default function TodayScreen() {
   const { signOut } = useAuth();
+  const isWide = useIsWideLayout();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<NavigationProp<TabParamList>>();
   const route = useRoute<RouteProp<TabParamList, '오늘'>>();
@@ -298,7 +300,7 @@ export default function TodayScreen() {
           <Text style={styles.dateLabel}>
             {formatTodayLabel()} · v{APP_VERSION}
           </Text>
-          {!IS_LOCAL_MODE && (
+          {!IS_LOCAL_MODE && !isWide && (
             <View style={styles.headerActions}>
               <Pressable onPress={signOut} hitSlop={8} style={styles.headerActionButton}>
                 <Ionicons name="log-out-outline" size={20} color={colors.subtext} />

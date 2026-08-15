@@ -17,6 +17,17 @@ function normalizeUrl(raw: string): string {
   return /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(trimmed) ? trimmed : `https://${trimmed}`;
 }
 
+// 제목을 못 가져온 채로(특히 웹에서는 대상 사이트의 CORS 정책 때문에 자동완성이
+// 거의 항상 실패한다) 저장을 누르면 아무 반응이 없어 "멈춘 것"처럼 보이던 문제를
+// 막기 위해, 제목이 비어있으면 도메인을 제목으로 대신 쓴다.
+function fallbackTitleFromUrl(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return url;
+  }
+}
+
 const HTML_ENTITIES: Record<string, string> = {
   '&amp;': '&',
   '&lt;': '<',
@@ -95,10 +106,11 @@ export default function FavoriteFormModal({
   };
 
   const handleSave = () => {
-    const title = titleInput.trim();
     const url = urlInput.trim();
-    if (!title || !url) return;
-    onSubmit(title, normalizeUrl(url));
+    if (!url) return;
+    const normalizedUrl = normalizeUrl(url);
+    const title = titleInput.trim() || fallbackTitleFromUrl(normalizedUrl);
+    onSubmit(title, normalizedUrl);
   };
 
   return (
