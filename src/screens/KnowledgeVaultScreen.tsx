@@ -57,6 +57,23 @@ const GRID_CONTENT_PADDING = 40;
 // 접힌 카드의 높이를 고정해 하단 정보줄(작성일/복습일/수정/삭제)이 카드마다 다른 위치에
 // 뜨지 않고 항상 카드 맨 아래에 오도록 한다. 펼친 카드는 이 제한 없이 내용만큼 늘어난다.
 const COLLAPSED_CARD_HEIGHT = 260;
+// 아래 상수들은 접힌 카드 안에서 본문에 실제로 쓸 수 있는 세로 공간을 역산하기 위한
+// 대략적인 수치다(패딩/하단 정보줄/이미지/태그 줄이 차지하는 만큼을 COLLAPSED_CARD_HEIGHT에서
+// 뺀 나머지를 줄 높이로 나눈다) — 이미지·태그가 없는 카드는 본문 줄 수를 3줄로 고정하지 않고
+// 카드 높이를 실제로 채우도록 하기 위함.
+const CARD_VERTICAL_PADDING = 28; // memoCard padding(14) * 2
+const CARD_FOOTER_BLOCK_HEIGHT = 26; // memoFooter marginTop(8) + 아이콘/텍스트 줄 높이
+const CARD_TAG_ROW_HEIGHT = 27; // cardTagRow marginTop(8) + 칩 높이
+const CARD_IMAGE_BLOCK_HEIGHT = 140; // 접힌 카드의 이미지 maxHeight(130) + marginBottom(10)
+const CARD_TEXT_LINE_HEIGHT = 21; // MemoBody styles.text.lineHeight
+const CARD_MIN_LINES = 2;
+
+function getCollapsedLineCount(item: Memo): number {
+  let available = COLLAPSED_CARD_HEIGHT - CARD_VERTICAL_PADDING - CARD_FOOTER_BLOCK_HEIGHT;
+  if (item.imageUris && item.imageUris.length > 0) available -= CARD_IMAGE_BLOCK_HEIGHT;
+  if (item.tags && item.tags.length > 0) available -= CARD_TAG_ROW_HEIGHT;
+  return Math.max(CARD_MIN_LINES, Math.floor(available / CARD_TEXT_LINE_HEIGHT));
+}
 
 export default function KnowledgeVaultScreen() {
   const isWide = useIsWideLayout();
@@ -414,7 +431,9 @@ export default function KnowledgeVaultScreen() {
                 <MemoBody
                   memo={item}
                   onToggleItem={(itemId) => toggleChecklistItem(item.id, itemId)}
-                  numberOfLines={item.noteType === 'checklist' ? undefined : isExpanded ? undefined : 3}
+                  numberOfLines={
+                    item.noteType === 'checklist' ? undefined : isExpanded ? undefined : getCollapsedLineCount(item)
+                  }
                 />
                 {item.tags && item.tags.length > 0 && (
                   <View style={styles.cardTagRow}>
