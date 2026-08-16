@@ -13,7 +13,8 @@ export function newMemoReviewFields(now: number): Pick<Memo, 'reviewStage' | 'ne
 }
 
 export function isDueForReview(memo: Memo, now: number): boolean {
-  return memo.nextReviewAt <= now;
+  // dailyPin 카드는 망각곡선 간격을 무시하고 항상 오늘의 복습 대상이다.
+  return memo.dailyPin === true || memo.nextReviewAt <= now;
 }
 
 export function markRemembered(memo: Memo, now: number): Memo {

@@ -33,6 +33,9 @@ export interface Memo {
   nextReviewAt: number;
   lastReviewedAt?: number;
   isPinned?: boolean;
+  // 그리드 최상단 고정 + 매일 복습 대상으로 강제 편입(다음 복습일과 무관하게 매일 다시 나타남).
+  // isPinned(구글킵 스타일 위치 고정)과는 별개 개념 — 핀 아이콘으로 켠다.
+  dailyPin?: boolean;
   tags?: string[];
   color?: string;
   noteType?: 'text' | 'checklist';

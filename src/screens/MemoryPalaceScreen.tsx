@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import {
   FlatList,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -16,6 +17,9 @@ import MemoBody from '../components/MemoBody';
 import MemoImage from '../components/MemoImage';
 
 type Page = { kind: 'todos' } | { kind: 'memo'; memo: Memo };
+
+const DIALOG_MAX_WIDTH = 560;
+const DIALOG_MAX_HEIGHT = 640;
 
 interface Props {
   visible: boolean;
@@ -37,7 +41,15 @@ export default function MemoryPalaceScreen({
   onCompleteTodo,
   onClose,
 }: Props) {
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
+  // 웹에서는 카드를 눌렀을 때 뜨는 모달(KnowledgeVaultScreen의 뷰어)과 같은 느낌으로,
+  // 전체화면 대신 어두운 배경 위 중앙 다이얼로그로 작게 띄운다. 모바일 앱은 기존처럼
+  // 전체화면 슬라이드를 유지한다(잠금화면 위젯과의 통일감).
+  const isWeb = Platform.OS === 'web';
+  const dialogWidth = Math.min(DIALOG_MAX_WIDTH, width - 40);
+  const dialogHeight = Math.min(DIALOG_MAX_HEIGHT, height - 80);
+  // 가로 페이징 카드 한 장의 너비 — 웹은 다이얼로그 너비, 앱은 창 전체 너비.
+  const pageWidth = isWeb ? dialogWidth : width;
   // FlatList가 가로 페이지 셀에 자동으로 높이를 채워주지 않아(웹에서 특히),
   // 카드가 셀보다 길면 스크롤 없이 그냥 잘린다 — 덱 영역 실측 높이를 재서
   // 각 페이지의 ScrollView에 직접 넘겨준다.
@@ -61,17 +73,16 @@ export default function MemoryPalaceScreen({
     setSkippedIds((prev) => new Set(prev).add(id));
   };
 
-  return (
-    <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
-      <View style={styles.container}>
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>기억의 궁전</Text>
-          <Pressable onPress={onClose} hitSlop={8}>
-            <Text style={styles.finishText}>마치기</Text>
-          </Pressable>
-        </View>
+  const body = (
+    <View style={isWeb ? [styles.webDialog, { width: dialogWidth, height: dialogHeight }] : styles.container}>
+      <View style={[styles.header, isWeb && styles.webHeader]}>
+        <Text style={styles.headerTitle}>기억의 궁전</Text>
+        <Pressable onPress={onClose} hitSlop={8}>
+          <Text style={styles.finishText}>마치기</Text>
+        </Pressable>
+      </View>
 
-        {pages.length === 0 ? (
+      {pages.length === 0 ? (
           <View style={styles.empty}>
             <Ionicons name="checkmark-circle-outline" size={48} color={colors.subtext} />
             <Text style={styles.emptyText}>복습할 카드가 없어요</Text>
@@ -90,7 +101,7 @@ export default function MemoryPalaceScreen({
                 if (item.kind === 'todos') {
                   return (
                     <ScrollView
-                      style={{ width, height: deckHeight || undefined }}
+                      style={{ width: pageWidth, height: deckHeight || undefined }}
                       nestedScrollEnabled
                       contentContainerStyle={styles.cardWrap}
                       showsVerticalScrollIndicator={false}
@@ -114,7 +125,7 @@ export default function MemoryPalaceScreen({
                 const memo = item.memo;
                 return (
                   <ScrollView
-                    style={{ width, height: deckHeight || undefined }}
+                    style={{ width: pageWidth, height: deckHeight || undefined }}
                     nestedScrollEnabled
                     contentContainerStyle={styles.cardWrap}
                     showsVerticalScrollIndicator={false}
@@ -151,7 +162,12 @@ export default function MemoryPalaceScreen({
             )}
           </>
         )}
-      </View>
+    </View>
+  );
+
+  return (
+    <Modal visible={visible} transparent={isWeb} animationType={isWeb ? 'fade' : 'slide'} onRequestClose={onClose}>
+      {isWeb ? <View style={styles.webBackdrop}>{body}</View> : body}
     </Modal>
   );
 }
@@ -160,6 +176,18 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  webBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  webDialog: {
+    backgroundColor: colors.background,
+    borderRadius: 16,
+    overflow: 'hidden',
   },
   header: {
     flexDirection: 'row',
@@ -170,6 +198,9 @@ const styles = StyleSheet.create({
     paddingBottom: 14,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
+  },
+  webHeader: {
+    paddingTop: 16,
   },
   headerTitle: {
     fontSize: 18,

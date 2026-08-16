@@ -100,6 +100,7 @@ export default function KnowledgeVaultScreen() {
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [palaceOpen, setPalaceOpen] = useState(false);
   const [viewingId, setViewingId] = useState<string | null>(null);
+  const [helpOpen, setHelpOpen] = useState(false);
   // 표시용이 아니라 기억의 궁전(잠금화면/앱 내)에 오늘 할 일을 전달하고 완료 체크를 반영하기 위한 값.
   const [todayTodos, setTodayTodos] = useState<Todo[]>([]);
 
@@ -108,8 +109,10 @@ export default function KnowledgeVaultScreen() {
     [memos, now]
   );
 
+  // 핀(dailyPin)이 별(isPinned)보다 더 위, 그 다음 나머지 순서.
+  const memoSortPriority = (m: Memo) => (m.dailyPin ? 2 : m.isPinned ? 1 : 0);
   const sortedMemos = useMemo(
-    () => [...memos].sort((a, b) => Number(!!b.isPinned) - Number(!!a.isPinned)),
+    () => [...memos].sort((a, b) => memoSortPriority(b) - memoSortPriority(a)),
     [memos]
   );
 
@@ -319,6 +322,16 @@ export default function KnowledgeVaultScreen() {
     setNow(Date.now());
   };
 
+  // 핀: 그리드 최상단 고정 + 매일 복습 대상 강제 편입. isPinned(별) 켬/끔과는 독립적으로 동작한다.
+  const toggleDailyPin = (id: string) => {
+    const updated = memos.map((m) => (m.id === id ? { ...m, dailyPin: !m.dailyPin } : m));
+    setMemos(updated);
+    const changed = updated.find((m) => m.id === id);
+    if (changed) updateItem(STORAGE_KEYS.MEMOS, changed);
+    // isDueForReview가 dailyPin을 보므로, 방금 켠 카드가 바로 오늘 복습 목록에 반영되도록 갱신.
+    setNow(Date.now());
+  };
+
   const deleteMemo = (id: string, onDeleted?: () => void) => {
     showAlert('삭제', '이 카드를 삭제할까요?', [
       { text: '취소', style: 'cancel' },
@@ -351,7 +364,12 @@ export default function KnowledgeVaultScreen() {
     <ResponsiveScreenContainer maxWidth="none">
     <View style={styles.container}>
       <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
-        <Text style={styles.title}>지식창고</Text>
+        <View style={styles.titleRow}>
+          <Text style={styles.title}>지식창고</Text>
+          <Pressable onPress={() => setHelpOpen(true)} hitSlop={8}>
+            <Ionicons name="help-circle-outline" size={20} color={colors.subtext} />
+          </Pressable>
+        </View>
         <Pressable style={styles.palaceButton} onPress={() => setPalaceOpen(true)}>
           <Ionicons name="sparkles-outline" size={16} color={colors.primary} />
           <Text style={styles.palaceButtonText}>기억의 궁전</Text>
@@ -451,6 +469,13 @@ export default function KnowledgeVaultScreen() {
                   <Text style={styles.memoNextReview}>
                     다음 복습 {formatShortDate(item.nextReviewAt)}
                   </Text>
+                  <Pressable onPress={() => toggleDailyPin(item.id)} hitSlop={8}>
+                    <Ionicons
+                      name={item.dailyPin ? 'pin' : 'pin-outline'}
+                      size={18}
+                      color={item.dailyPin ? colors.primary : colors.subtext}
+                    />
+                  </Pressable>
                   <Pressable onPress={() => togglePinned(item.id)} hitSlop={8}>
                     <Ionicons
                       name={item.isPinned ? 'star' : 'star-outline'}
@@ -510,6 +535,13 @@ export default function KnowledgeVaultScreen() {
                   <Text style={styles.memoNextReview}>
                     다음 복습 {formatShortDate(viewingMemo.nextReviewAt)}
                   </Text>
+                  <Pressable onPress={() => toggleDailyPin(viewingMemo.id)} hitSlop={8}>
+                    <Ionicons
+                      name={viewingMemo.dailyPin ? 'pin' : 'pin-outline'}
+                      size={18}
+                      color={viewingMemo.dailyPin ? colors.primary : colors.subtext}
+                    />
+                  </Pressable>
                   <Pressable onPress={() => togglePinned(viewingMemo.id)} hitSlop={8}>
                     <Ionicons
                       name={viewingMemo.isPinned ? 'star' : 'star-outline'}
@@ -539,6 +571,35 @@ export default function KnowledgeVaultScreen() {
               </Pressable>
             </View>
           )}
+        </View>
+      </Modal>
+
+      <Modal visible={helpOpen} transparent animationType="fade" onRequestClose={() => setHelpOpen(false)}>
+        <View style={styles.viewerBackdrop}>
+          <View style={styles.viewerCard}>
+            <ScrollView contentContainerStyle={styles.viewerScrollContent}>
+              <Text style={styles.helpTitle}>에빙하우스의 망각곡선</Text>
+              <Text style={styles.helpBody}>
+                사람은 새로 배운 내용을 시간이 지날수록 잊어버리는데, 잊는 속도는 학습 직후에 가장
+                가파르고 시간이 지날수록 완만해집니다. 지식창고는 이 곡선에 맞춰 카드를 저장한
+                뒤 1일 → 3일 → 7일 → 14일 → 30일 → 90일 간격으로 다시 보여줘서, 잊혀지기 직전에
+                한 번씩 다시 떠올리게 하고 그때마다 다음 복습 간격을 더 길게 늘립니다. 이렇게
+                반복하면 짧은 기억이 오래가는 기억으로 자리 잡습니다.
+              </Text>
+              <Text style={styles.helpTitle}>기억의 궁전이란?</Text>
+              <Text style={styles.helpBody}>
+                '기억의 궁전(장소법)'은 고대 그리스 때부터 전해지는 기억법으로, 익숙한 공간 속
+                장소마다 기억할 정보를 하나씩 놓아두고 그 공간을 걸어 다니듯 떠올리며 정보를
+                꺼내는 방법입니다. 이 앱의 '기억의 궁전'은 오늘 복습할 카드를 한 장씩 순서대로
+                넘겨보는 세션이에요 — 카드를 넘기며 다시 떠올리는 과정이 장소를 옮겨 다니며
+                기억을 꺼내는 것과 닮아서 이 이름을 붙였습니다. 핀으로 고정한 카드와 아직 잊지
+                않은 카드까지 매일 반복해서 넘겨보면 더 오래 기억할 수 있어요.
+              </Text>
+            </ScrollView>
+            <Pressable style={styles.viewerCloseButton} onPress={() => setHelpOpen(false)}>
+              <Text style={styles.viewerCloseText}>닫기</Text>
+            </Pressable>
+          </View>
         </View>
       </Modal>
 
@@ -637,10 +698,27 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     paddingBottom: 8,
   },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
   title: {
     fontSize: 28,
     fontWeight: '700',
     color: colors.text,
+  },
+  helpTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: 6,
+  },
+  helpBody: {
+    fontSize: 14,
+    lineHeight: 21,
+    color: colors.subtext,
+    marginBottom: 20,
   },
   palaceButton: {
     flexDirection: 'row',

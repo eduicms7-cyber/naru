@@ -28,6 +28,7 @@ create table if not exists memos (
   next_review_at bigint not null,
   last_reviewed_at bigint,
   is_pinned boolean not null default false,
+  daily_pin boolean not null default false,
   tags text[] not null default '{}',
   color text,
   note_type text not null default 'text',
@@ -41,6 +42,7 @@ create table if not exists memos (
 -- alter table memos add column if not exists color text;
 -- alter table memos add column if not exists note_type text not null default 'text';
 -- alter table memos add column if not exists checklist_items jsonb not null default '[]';
+-- alter table memos add column if not exists daily_pin boolean not null default false;
 -- alter table todos add column if not exists completed_at bigint;
 -- alter table todos add column if not exists tags text[] not null default '{}';
 -- alter table todos add column if not exists is_pinned boolean not null default false;
