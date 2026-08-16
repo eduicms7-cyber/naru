@@ -54,6 +54,9 @@ function formatDate(timestamp: number): string {
 const GRID_CARD_MIN_WIDTH = 300;
 // listContent의 좌우 paddingHorizontal(20) 합.
 const GRID_CONTENT_PADDING = 40;
+// 접힌 카드의 높이를 고정해 하단 정보줄(작성일/복습일/수정/삭제)이 카드마다 다른 위치에
+// 뜨지 않고 항상 카드 맨 아래에 오도록 한다. 펼친 카드는 이 제한 없이 내용만큼 늘어난다.
+const COLLAPSED_CARD_HEIGHT = 260;
 
 export default function KnowledgeVaultScreen() {
   const isWide = useIsWideLayout();
@@ -79,6 +82,7 @@ export default function KnowledgeVaultScreen() {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [palaceOpen, setPalaceOpen] = useState(false);
+  const [viewingId, setViewingId] = useState<string | null>(null);
   // 표시용이 아니라 기억의 궁전(잠금화면/앱 내)에 오늘 할 일을 전달하고 완료 체크를 반영하기 위한 값.
   const [todayTodos, setTodayTodos] = useState<Todo[]>([]);
 
@@ -298,7 +302,7 @@ export default function KnowledgeVaultScreen() {
     setNow(Date.now());
   };
 
-  const deleteMemo = (id: string) => {
+  const deleteMemo = (id: string, onDeleted?: () => void) => {
     showAlert('삭제', '이 카드를 삭제할까요?', [
       { text: '취소', style: 'cancel' },
       {
@@ -307,10 +311,15 @@ export default function KnowledgeVaultScreen() {
         onPress: () => {
           setMemos(memos.filter((m) => m.id !== id));
           deleteItem(STORAGE_KEYS.MEMOS, id);
+          onDeleted?.();
         },
       },
     ]);
   };
+
+  // 웹(구글킵 스타일)에서는 카드를 눌렀을 때 그리드 안에서 펼치는 대신 모달로 전체 내용을 보여준다.
+  // 모바일 앱은 기존처럼 카드 자체가 눌러서 펼쳐지는 방식을 유지한다(잠금화면 위젯과의 통일감).
+  const viewingMemo = memos.find((m) => m.id === viewingId) ?? null;
 
   const handlePalaceComplete = (memo: Memo) => {
     const updated = markRemembered(memo, Date.now());
@@ -392,28 +401,31 @@ export default function KnowledgeVaultScreen() {
             <Pressable
               style={[
                 styles.memoCard,
+                !isExpanded && styles.memoCardCollapsed,
                 numColumns > 1 && { width: `${100 / numColumns - 2}%` },
                 item.color ? { backgroundColor: item.color } : null,
               ]}
-              onPress={() => toggleExpanded(item.id)}
+              onPress={() => (Platform.OS === 'web' ? setViewingId(item.id) : toggleExpanded(item.id))}
             >
-              {item.imageUris && item.imageUris.length > 0 && (
-                <MemoImage uris={item.imageUris} maxHeight={260} />
-              )}
-              <MemoBody
-                memo={item}
-                onToggleItem={(itemId) => toggleChecklistItem(item.id, itemId)}
-                numberOfLines={item.noteType === 'checklist' ? undefined : isExpanded ? undefined : 3}
-              />
-              {item.tags && item.tags.length > 0 && (
-                <View style={styles.cardTagRow}>
-                  {item.tags.map((tag) => (
-                    <View key={tag} style={styles.cardTagChip}>
-                      <Text style={styles.cardTagChipText}>{tag}</Text>
-                    </View>
-                  ))}
-                </View>
-              )}
+              <View style={!isExpanded && styles.memoCardContent}>
+                {item.imageUris && item.imageUris.length > 0 && (
+                  <MemoImage uris={item.imageUris} maxHeight={isExpanded ? 260 : 130} />
+                )}
+                <MemoBody
+                  memo={item}
+                  onToggleItem={(itemId) => toggleChecklistItem(item.id, itemId)}
+                  numberOfLines={item.noteType === 'checklist' ? undefined : isExpanded ? undefined : 3}
+                />
+                {item.tags && item.tags.length > 0 && (
+                  <View style={styles.cardTagRow}>
+                    {item.tags.map((tag) => (
+                      <View key={tag} style={styles.cardTagChip}>
+                        <Text style={styles.cardTagChipText}>{tag}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </View>
               <View style={styles.memoFooter}>
                 <Text style={styles.memoDate}>{formatDate(item.createdAt)}</Text>
                 <View style={styles.memoFooterRight}>
@@ -443,6 +455,73 @@ export default function KnowledgeVaultScreen() {
       <Pressable style={styles.fab} onPress={openComposer}>
         <Ionicons name="add" size={28} color="#FFFFFF" />
       </Pressable>
+
+      <Modal
+        visible={viewingMemo !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setViewingId(null)}
+      >
+        <View style={styles.viewerBackdrop}>
+          {viewingMemo && (
+            <View
+              style={[styles.viewerCard, viewingMemo.color ? { backgroundColor: viewingMemo.color } : null]}
+            >
+              <ScrollView contentContainerStyle={styles.viewerScrollContent}>
+                {viewingMemo.imageUris && viewingMemo.imageUris.length > 0 && (
+                  <MemoImage uris={viewingMemo.imageUris} maxHeight={360} />
+                )}
+                <MemoBody
+                  memo={viewingMemo}
+                  onToggleItem={(itemId) => toggleChecklistItem(viewingMemo.id, itemId)}
+                />
+                {viewingMemo.tags && viewingMemo.tags.length > 0 && (
+                  <View style={styles.cardTagRow}>
+                    {viewingMemo.tags.map((tag) => (
+                      <View key={tag} style={styles.cardTagChip}>
+                        <Text style={styles.cardTagChipText}>{tag}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </ScrollView>
+              <View style={styles.viewerMeta}>
+                <Text style={styles.memoDate}>{formatDate(viewingMemo.createdAt)}</Text>
+                <View style={styles.memoFooterRight}>
+                  <Text style={styles.memoNextReview}>
+                    다음 복습 {formatShortDate(viewingMemo.nextReviewAt)}
+                  </Text>
+                  <Pressable onPress={() => togglePinned(viewingMemo.id)} hitSlop={8}>
+                    <Ionicons
+                      name={viewingMemo.isPinned ? 'star' : 'star-outline'}
+                      size={18}
+                      color={viewingMemo.isPinned ? colors.star : colors.subtext}
+                    />
+                  </Pressable>
+                  <Pressable
+                    onPress={() => {
+                      setViewingId(null);
+                      openEditor(viewingMemo);
+                    }}
+                    hitSlop={8}
+                  >
+                    <Ionicons name="pencil-outline" size={18} color={colors.subtext} />
+                  </Pressable>
+                  <Pressable
+                    onPress={() => deleteMemo(viewingMemo.id, () => setViewingId(null))}
+                    hitSlop={8}
+                  >
+                    <Ionicons name="trash-outline" size={18} color={colors.subtext} />
+                  </Pressable>
+                </View>
+              </View>
+              <Pressable style={styles.viewerCloseButton} onPress={() => setViewingId(null)}>
+                <Text style={styles.viewerCloseText}>닫기</Text>
+              </Pressable>
+            </View>
+          )}
+        </View>
+      </Modal>
 
       <Modal visible={composerOpen} animationType="slide" onRequestClose={() => setComposerOpen(false)}>
         <KeyboardAvoidingView
@@ -626,6 +705,13 @@ const styles = StyleSheet.create({
     padding: 14,
     marginBottom: 10,
   },
+  memoCardCollapsed: {
+    height: COLLAPSED_CARD_HEIGHT,
+  },
+  memoCardContent: {
+    flex: 1,
+    overflow: 'hidden',
+  },
   gridRow: {
     justifyContent: 'space-between',
   },
@@ -667,6 +753,44 @@ const styles = StyleSheet.create({
   },
   memoNextReview: {
     fontSize: 12,
+    color: colors.primary,
+  },
+  viewerBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  viewerCard: {
+    width: '100%',
+    maxWidth: 560,
+    maxHeight: '85%',
+    backgroundColor: colors.card,
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  viewerScrollContent: {
+    padding: 20,
+  },
+  viewerMeta: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  viewerCloseButton: {
+    alignItems: 'center',
+    paddingVertical: 14,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  viewerCloseText: {
+    fontSize: 15,
+    fontWeight: '600',
     color: colors.primary,
   },
   fab: {
