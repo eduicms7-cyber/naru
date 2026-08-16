@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   FlatList,
   Modal,
@@ -57,9 +57,15 @@ export default function MemoryPalaceScreen({
   // "다시보기"로 넘긴 카드의 id. 데이터는 그대로 두고 이번 세션 화면에서만 숨긴다 —
   // 궁전을 다시 열면(visible이 true가 될 때) 비워지므로 그때는 다시 나타난다.
   const [skippedIds, setSkippedIds] = useState<Set<string>>(new Set());
+  // 하단 점/이전·다음 버튼 및 스와이프 동기화용 현재 페이지 인덱스.
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const listRef = useRef<FlatList<Page>>(null);
 
   useEffect(() => {
-    if (visible) setSkippedIds(new Set());
+    if (visible) {
+      setSkippedIds(new Set());
+      setCurrentIndex(0);
+    }
   }, [visible]);
 
   const visibleMemos = memos.filter((memo) => !skippedIds.has(memo.id));
@@ -69,8 +75,21 @@ export default function MemoryPalaceScreen({
     ...visibleMemos.map((memo) => ({ kind: 'memo' as const, memo })),
   ];
 
+  // "기억완료"로 카드가 오늘 복습 목록에서 빠지는 등 pages 길이가 줄어들면 인덱스가
+  // 범위를 벗어날 수 있어 매 렌더마다 clamp 한다.
+  const maxIndex = Math.max(0, pages.length - 1);
+  if (currentIndex > maxIndex) {
+    setCurrentIndex(maxIndex);
+  }
+
   const skipCurrent = (id: string) => {
     setSkippedIds((prev) => new Set(prev).add(id));
+  };
+
+  const goToIndex = (index: number) => {
+    const clamped = Math.max(0, Math.min(maxIndex, index));
+    listRef.current?.scrollToIndex({ index: clamped, animated: true });
+    setCurrentIndex(clamped);
   };
 
   const body = (
@@ -90,6 +109,7 @@ export default function MemoryPalaceScreen({
         ) : (
           <>
             <FlatList
+              ref={listRef}
               style={styles.deck}
               onLayout={(e) => setDeckHeight(e.nativeEvent.layout.height)}
               data={pages}
@@ -97,6 +117,11 @@ export default function MemoryPalaceScreen({
               horizontal
               pagingEnabled
               showsHorizontalScrollIndicator={false}
+              getItemLayout={(_, index) => ({ length: pageWidth, offset: pageWidth * index, index })}
+              onMomentumScrollEnd={(e) => {
+                const index = Math.round(e.nativeEvent.contentOffset.x / pageWidth);
+                setCurrentIndex(Math.max(0, Math.min(maxIndex, index)));
+              }}
               renderItem={({ item }) => {
                 if (item.kind === 'todos') {
                   return (
@@ -158,7 +183,43 @@ export default function MemoryPalaceScreen({
               }}
             />
             {pages.length > 1 && (
-              <Text style={styles.hint}>옆으로 넘겨서 다음 카드를 볼 수 있어요 ({pages.length}장 남음)</Text>
+              <View style={styles.navRow}>
+                <Pressable
+                  style={styles.navArrow}
+                  onPress={() => goToIndex(currentIndex - 1)}
+                  disabled={currentIndex === 0}
+                  hitSlop={8}
+                >
+                  <Ionicons
+                    name="chevron-back"
+                    size={22}
+                    color={currentIndex === 0 ? colors.border : colors.subtext}
+                  />
+                </Pressable>
+                <View style={styles.dotRow}>
+                  {pages.map((page, index) => (
+                    <Pressable
+                      key={page.kind === 'todos' ? 'todos' : page.memo.id}
+                      onPress={() => goToIndex(index)}
+                      hitSlop={6}
+                    >
+                      <View style={[styles.dot, index === currentIndex && styles.dotActive]} />
+                    </Pressable>
+                  ))}
+                </View>
+                <Pressable
+                  style={styles.navArrow}
+                  onPress={() => goToIndex(currentIndex + 1)}
+                  disabled={currentIndex === maxIndex}
+                  hitSlop={8}
+                >
+                  <Ionicons
+                    name="chevron-forward"
+                    size={22}
+                    color={currentIndex === maxIndex ? colors.border : colors.subtext}
+                  />
+                </Pressable>
+              </View>
             )}
           </>
         )}
@@ -308,10 +369,31 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 15,
   },
-  hint: {
-    textAlign: 'center',
-    color: colors.subtext,
-    fontSize: 12,
+  navRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 16,
     paddingBottom: 24,
+  },
+  navArrow: {
+    padding: 4,
+  },
+  dotRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 8,
+    maxWidth: 220,
+  },
+  dot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: colors.border,
+  },
+  dotActive: {
+    backgroundColor: colors.primary,
+    width: 16,
   },
 });
