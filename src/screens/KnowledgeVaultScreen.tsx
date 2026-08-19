@@ -238,10 +238,7 @@ export default function KnowledgeVaultScreen() {
     const trimmedItems = checklistItems
       .map((item) => ({ ...item, text: item.text.trim() }))
       .filter((item) => item.text.length > 0);
-    const hasContent =
-      noteType === 'checklist'
-        ? trimmedItems.length > 0 || imageUris.length > 0 || !!trimmed
-        : !!trimmed || imageUris.length > 0;
+    const hasContent = !!trimmed || trimmedItems.length > 0 || imageUris.length > 0;
     if (!hasContent) return;
     const tags = parseTags(tagsInput);
     const shared = {
@@ -250,7 +247,10 @@ export default function KnowledgeVaultScreen() {
       color,
       tags,
       noteType,
-      checklistItems: noteType === 'checklist' ? trimmedItems : [],
+      // noteType과 무관하게 항목을 보존한다 — 그래야 체크리스트를 입력한 뒤 텍스트 탭으로
+      // 전환했다가 다시 체크리스트로 돌아와도(또는 실수로 전환한 채 저장해도) 입력한 내용이
+      // 사라지지 않는다. 화면에는 noteType이 'checklist'일 때만 렌더링된다(MemoBody.tsx).
+      checklistItems: trimmedItems,
     };
     if (editingId) {
       const updated = memos.map((m) => (m.id === editingId ? { ...m, ...shared } : m));

@@ -199,7 +199,10 @@ export default function TodayScreen() {
       detailText: trimmedText,
       detailImageUris: detailImageUris.length > 0 ? detailImageUris : undefined,
       detailNoteType,
-      detailChecklistItems: detailNoteType === 'checklist' ? trimmedItems : [],
+      // noteType과 무관하게 항목을 보존한다 — 체크리스트를 입력한 뒤 텍스트 탭으로 전환했다가
+      // 다시 돌아와도(또는 실수로 전환한 채 저장해도) 입력한 내용이 사라지지 않는다.
+      // 화면에는 detailNoteType이 'checklist'일 때만 렌더링된다(MemoBody.tsx).
+      detailChecklistItems: trimmedItems,
     };
     const updated = todos.map((t) => (t.id === detailTodoId ? { ...t, ...detail } : t));
     setTodos(updated);
