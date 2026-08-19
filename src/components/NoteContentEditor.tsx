@@ -57,6 +57,7 @@ export default function NoteContentEditor({
   const inputRef = useRef<TextInput>(null);
   const dropZoneRef = useRef<View>(null);
   const [dragActive, setDragActive] = useState(false);
+  const checklistInputRefs = useRef<Map<string, HTMLInputElement>>(new Map());
 
   // 웹에서만 가능: RN TextInput은 onPaste를 지원하지 않고 react-native-web도 이 prop을
   // 전달하지 않으므로, 웹에서 렌더링되는 실제 DOM 노드에 직접 paste 리스너를 붙인다.
@@ -112,6 +113,28 @@ export default function NoteContentEditor({
     };
   }, [active, imageUris, onImageUrisChange]);
 
+  // 웹에서만: 체크리스트 항목 입력창에 여러 줄(또는 표에서 복사한 여러 행)을 붙여넣으면
+  // 줄바꿈 단위로 잘라 각 줄을 별도 체크박스 항목으로 만든다. RN TextInput은 multiline=false일 때
+  // 웹에서 단일줄 <input>으로 렌더링되어 붙여넣기 시 브라우저가 개행을 지워버리므로,
+  // 위 이미지 붙여넣기와 같은 방식으로 실제 DOM 노드에 paste 리스너를 직접 붙여 개행을 가로챈다.
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !active || noteType !== 'checklist') return;
+    const cleanups: Array<() => void> = [];
+    checklistItems.forEach((item) => {
+      const node = checklistInputRefs.current.get(item.id);
+      if (!node) return;
+      const handlePaste = (e: ClipboardEvent) => {
+        const pasted = e.clipboardData?.getData('text');
+        if (!pasted || !pasted.includes('\n')) return;
+        e.preventDefault();
+        applyChecklistPaste(item.id, pasted, node.selectionStart ?? 0, node.selectionEnd ?? 0);
+      };
+      node.addEventListener('paste', handlePaste as EventListener);
+      cleanups.push(() => node.removeEventListener('paste', handlePaste as EventListener));
+    });
+    return () => cleanups.forEach((cleanup) => cleanup());
+  }, [active, noteType, checklistItems]);
+
   const wrapSelection = (marker: string) => {
     const { start, end } = textSelection;
     const before = text.slice(0, start);
@@ -151,6 +174,28 @@ export default function NoteContentEditor({
 
   const removeChecklistItem = (id: string) => {
     onChecklistItemsChange(checklistItems.filter((it) => it.id !== id));
+  };
+
+  // 붙여넣은 텍스트를 커서 위치에 끼워 넣은 뒤 줄바꿈 기준으로 나눠, 첫 줄은 현재 항목에
+  // 남기고 나머지 줄들은 그 뒤에 새 체크박스 항목으로 삽입한다. 표에서 복사한 여러 행도
+  // 행 사이 개행으로 구분되므로 같은 방식으로 한 행씩 항목이 된다.
+  const applyChecklistPaste = (id: string, pastedText: string, selStart: number, selEnd: number) => {
+    const index = checklistItems.findIndex((it) => it.id === id);
+    if (index === -1) return;
+    const current = checklistItems[index];
+    const before = current.text.slice(0, selStart);
+    const after = current.text.slice(selEnd);
+    const merged = before + pastedText + after;
+    const lines = merged.split('\n').filter((line) => line.trim().length > 0);
+    if (lines.length === 0) {
+      updateChecklistItemText(id, '');
+      return;
+    }
+    const [firstLine, ...restLines] = lines;
+    const next = [...checklistItems];
+    next[index] = { ...current, text: firstLine };
+    next.splice(index + 1, 0, ...restLines.map((line) => ({ id: makeId(), text: line, done: false })));
+    onChecklistItemsChange(next);
   };
 
   const pickImages = async () => {
@@ -268,6 +313,12 @@ export default function NoteContentEditor({
             <View key={item.id} style={styles.checklistEditorRow}>
               <Ionicons name="square-outline" size={18} color={colors.subtext} />
               <TextInput
+                ref={(node) => {
+                  if (Platform.OS !== 'web') return;
+                  const el = node as unknown as HTMLInputElement | null;
+                  if (el) checklistInputRefs.current.set(item.id, el);
+                  else checklistInputRefs.current.delete(item.id);
+                }}
                 style={styles.checklistEditorInput}
                 placeholder="항목 입력"
                 placeholderTextColor={colors.subtext}
