@@ -2,7 +2,7 @@
   "expo": {
     "name": "Naru",
     "slug": "Naru",
-    "version": "1.0.24",
+    "version": "1.0.25",
     "scheme": "naru",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
