@@ -246,10 +246,11 @@ export default function KnowledgeVaultScreen() {
       imageUris: imageUris.length > 0 ? imageUris : undefined,
       color,
       tags,
-      noteType,
-      // noteType과 무관하게 항목을 보존한다 — 그래야 체크리스트를 입력한 뒤 텍스트 탭으로
-      // 전환했다가 다시 체크리스트로 돌아와도(또는 실수로 전환한 채 저장해도) 입력한 내용이
-      // 사라지지 않는다. 화면에는 noteType이 'checklist'일 때만 렌더링된다(MemoBody.tsx).
+      // 편집기에서 마지막으로 눌러둔 탭이 아니라 실제 남아있는 내용을 기준으로 타입을 정한다.
+      // 항목이 하나라도 있으면 체크리스트로 저장 — 그래야 체크리스트를 입력한 뒤 텍스트 탭으로
+      // 전환한 채(실수로든 의도적으로든) 저장해도 목록/상세에서 항목이 계속 보인다.
+      // 완전히 텍스트로 바꾸려면 체크리스트 탭에서 항목을 전부 지운 뒤 저장하면 된다.
+      noteType: (trimmedItems.length > 0 ? 'checklist' : 'text') as 'text' | 'checklist',
       checklistItems: trimmedItems,
     };
     if (editingId) {
