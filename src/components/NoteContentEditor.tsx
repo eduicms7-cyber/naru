@@ -21,6 +21,25 @@ function makeId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 }
 
+// 표(엑셀/구글시트/노션 등)를 복사하면 클립보드에 plain text와 함께 HTML 표(<table><tr><td>)도
+// 담기는데, 소스 앱에 따라 plain text의 셀 구분자가 탭이 아니라 개행인 경우가 있어 셀 단위로
+// 항목이 쪼개지는 문제가 있었다. HTML을 직접 파싱해 "한 행 = 한 줄"로 셀을 이어 붙인다.
+// 표가 아니면(HTML에 tr이 없으면) null을 반환해 호출부가 plain text 줄바꿈 분리로 넘어가게 한다.
+function extractTableRowLines(html: string): string[] | null {
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const rows = Array.from(doc.querySelectorAll('tr'));
+  if (rows.length === 0) return null;
+  const lines = rows
+    .map((tr) =>
+      Array.from(tr.querySelectorAll('td, th'))
+        .map((cell) => (cell.textContent ?? '').replace(/\s+/g, ' ').trim())
+        .filter((cellText) => cellText.length > 0)
+        .join(' ')
+    )
+    .filter((line) => line.length > 0);
+  return lines.length > 0 ? lines : null;
+}
+
 interface Props {
   noteType: 'text' | 'checklist';
   onNoteTypeChange: (noteType: 'text' | 'checklist') => void;
@@ -124,7 +143,14 @@ export default function NoteContentEditor({
       const node = checklistInputRefs.current.get(item.id);
       if (!node) return;
       const handlePaste = (e: ClipboardEvent) => {
-        const pasted = e.clipboardData?.getData('text');
+        const html = e.clipboardData?.getData('text/html');
+        const tableRows = html ? extractTableRowLines(html) : null;
+        if (tableRows) {
+          e.preventDefault();
+          applyChecklistRows(item.id, tableRows, node.selectionStart ?? 0, node.selectionEnd ?? 0);
+          return;
+        }
+        const pasted = e.clipboardData?.getData('text/plain') || e.clipboardData?.getData('text');
         if (!pasted || !pasted.includes('\n')) return;
         e.preventDefault();
         applyChecklistPaste(item.id, pasted, node.selectionStart ?? 0, node.selectionEnd ?? 0);
@@ -176,9 +202,34 @@ export default function NoteContentEditor({
     onChecklistItemsChange(checklistItems.filter((it) => it.id !== id));
   };
 
-  // 붙여넣은 텍스트를 커서 위치에 끼워 넣은 뒤 줄바꿈 기준으로 나눠, 첫 줄은 현재 항목에
-  // 남기고 나머지 줄들은 그 뒤에 새 체크박스 항목으로 삽입한다. 표에서 복사한 여러 행도
-  // 행 사이 개행으로 구분되므로 같은 방식으로 한 행씩 항목이 된다.
+  // lines의 첫 줄은 현재 항목에 남기고 나머지 줄들은 그 뒤에 새 체크박스 항목으로 삽입한다.
+  const applyChecklistLines = (id: string, lines: string[]) => {
+    if (lines.length === 0) return;
+    const index = checklistItems.findIndex((it) => it.id === id);
+    if (index === -1) return;
+    const current = checklistItems[index];
+    const [firstLine, ...restLines] = lines;
+    const next = [...checklistItems];
+    next[index] = { ...current, text: firstLine };
+    next.splice(index + 1, 0, ...restLines.map((line) => ({ id: makeId(), text: line, done: false })));
+    onChecklistItemsChange(next);
+  };
+
+  // 표 붙여넣기: 이미 행 단위로 나뉜 줄 목록(셀은 한 줄 안에 이어붙여져 있음)을 커서 위치의
+  // 앞/뒤 텍스트와 합쳐 그대로 항목으로 삽입한다(행 = 항목).
+  const applyChecklistRows = (id: string, rows: string[], selStart: number, selEnd: number) => {
+    const index = checklistItems.findIndex((it) => it.id === id);
+    if (index === -1) return;
+    const current = checklistItems[index];
+    const before = current.text.slice(0, selStart);
+    const after = current.text.slice(selEnd);
+    const lines = [...rows];
+    lines[0] = before + lines[0];
+    lines[lines.length - 1] = lines[lines.length - 1] + after;
+    applyChecklistLines(id, lines);
+  };
+
+  // 일반 여러 줄 텍스트 붙여넣기: 커서 위치에 끼워 넣은 뒤 줄바꿈 기준으로 나눠 항목화한다.
   const applyChecklistPaste = (id: string, pastedText: string, selStart: number, selEnd: number) => {
     const index = checklistItems.findIndex((it) => it.id === id);
     if (index === -1) return;
@@ -191,11 +242,7 @@ export default function NoteContentEditor({
       updateChecklistItemText(id, '');
       return;
     }
-    const [firstLine, ...restLines] = lines;
-    const next = [...checklistItems];
-    next[index] = { ...current, text: firstLine };
-    next.splice(index + 1, 0, ...restLines.map((line) => ({ id: makeId(), text: line, done: false })));
-    onChecklistItemsChange(next);
+    applyChecklistLines(id, lines);
   };
 
   const pickImages = async () => {
