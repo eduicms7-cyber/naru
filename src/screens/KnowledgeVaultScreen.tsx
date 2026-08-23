@@ -36,6 +36,7 @@ import MemoBody from '../components/MemoBody';
 import MemoImage from '../components/MemoImage';
 import NoteContentEditor from '../components/NoteContentEditor';
 import { showAlert } from '../utils/alert';
+import ArchiveListModal from '../components/ArchiveListModal';
 import MemoryPalaceScreen from './MemoryPalaceScreen';
 import ResponsiveScreenContainer from '../components/ResponsiveScreenContainer';
 import { SIDEBAR_WIDTH, useIsWideLayout } from '../utils/layout';
@@ -101,26 +102,31 @@ export default function KnowledgeVaultScreen() {
   const [palaceOpen, setPalaceOpen] = useState(false);
   const [viewingId, setViewingId] = useState<string | null>(null);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [archiveOpen, setArchiveOpen] = useState(false);
   // 표시용이 아니라 기억의 궁전(잠금화면/앱 내)에 오늘 할 일을 전달하고 완료 체크를 반영하기 위한 값.
   const [todayTodos, setTodayTodos] = useState<Todo[]>([]);
 
+  // 보관된 카드는 메인 목록과 기억의 궁전(복습 대상) 양쪽에서 완전히 제외한다.
+  const activeMemos = useMemo(() => memos.filter((m) => !m.isArchived), [memos]);
+  const archivedMemos = useMemo(() => memos.filter((m) => m.isArchived), [memos]);
+
   const dueMemos = useMemo(
-    () => memos.filter((m) => isDueForReview(m, now)),
-    [memos, now]
+    () => activeMemos.filter((m) => isDueForReview(m, now)),
+    [activeMemos, now]
   );
 
   // 핀(dailyPin)이 별(isPinned)보다 더 위, 그 다음 나머지 순서.
   const memoSortPriority = (m: Memo) => (m.dailyPin ? 2 : m.isPinned ? 1 : 0);
   const sortedMemos = useMemo(
-    () => [...memos].sort((a, b) => memoSortPriority(b) - memoSortPriority(a)),
-    [memos]
+    () => [...activeMemos].sort((a, b) => memoSortPriority(b) - memoSortPriority(a)),
+    [activeMemos]
   );
 
   const allTags = useMemo(() => {
     const set = new Set<string>();
-    memos.forEach((m) => m.tags?.forEach((tag) => set.add(tag)));
+    activeMemos.forEach((m) => m.tags?.forEach((tag) => set.add(tag)));
     return Array.from(set);
-  }, [memos]);
+  }, [activeMemos]);
 
   const visibleMemos = useMemo(
     () =>
@@ -333,6 +339,16 @@ export default function KnowledgeVaultScreen() {
     setNow(Date.now());
   };
 
+  // 카드를 보관하면 nextReviewAt과 무관하게 dueMemos/네이티브 setDueMemos 계산에서 완전히
+  // 빠지므로(activeMemos 기준), 기억의 궁전(잠금화면 포함)에 다시 나타나지 않는다.
+  const setMemoArchived = (id: string, isArchived: boolean) => {
+    const updated = memos.map((m) => (m.id === id ? { ...m, isArchived } : m));
+    setMemos(updated);
+    const changed = updated.find((m) => m.id === id);
+    if (changed) updateItem(STORAGE_KEYS.MEMOS, changed);
+    setNow(Date.now());
+  };
+
   const deleteMemo = (id: string, onDeleted?: () => void) => {
     showAlert('삭제', '이 카드를 삭제할까요?', [
       { text: '취소', style: 'cancel' },
@@ -369,6 +385,9 @@ export default function KnowledgeVaultScreen() {
           <Text style={styles.title}>지식창고</Text>
           <Pressable onPress={() => setHelpOpen(true)} hitSlop={8}>
             <Ionicons name="help-circle-outline" size={20} color={colors.subtext} />
+          </Pressable>
+          <Pressable onPress={() => setArchiveOpen(true)} hitSlop={8}>
+            <Ionicons name="archive-outline" size={20} color={colors.subtext} />
           </Pressable>
         </View>
         <Pressable style={styles.palaceButton} onPress={() => setPalaceOpen(true)}>
@@ -487,6 +506,9 @@ export default function KnowledgeVaultScreen() {
                   <Pressable onPress={() => openEditor(item)} hitSlop={8}>
                     <Ionicons name="pencil-outline" size={18} color={colors.subtext} />
                   </Pressable>
+                  <Pressable onPress={() => setMemoArchived(item.id, true)} hitSlop={8}>
+                    <Ionicons name="archive-outline" size={18} color={colors.subtext} />
+                  </Pressable>
                   <Pressable onPress={() => deleteMemo(item.id)} hitSlop={8}>
                     <Ionicons name="trash-outline" size={18} color={colors.subtext} />
                   </Pressable>
@@ -558,6 +580,15 @@ export default function KnowledgeVaultScreen() {
                     hitSlop={8}
                   >
                     <Ionicons name="pencil-outline" size={18} color={colors.subtext} />
+                  </Pressable>
+                  <Pressable
+                    onPress={() => {
+                      setMemoArchived(viewingMemo.id, true);
+                      setViewingId(null);
+                    }}
+                    hitSlop={8}
+                  >
+                    <Ionicons name="archive-outline" size={18} color={colors.subtext} />
                   </Pressable>
                   <Pressable
                     onPress={() => deleteMemo(viewingMemo.id, () => setViewingId(null))}
@@ -680,6 +711,24 @@ export default function KnowledgeVaultScreen() {
         todos={incompleteTodos}
         onCompleteTodo={completeTodoFromPalace}
         onClose={() => setPalaceOpen(false)}
+      />
+
+      <ArchiveListModal
+        visible={archiveOpen}
+        title="보관함"
+        emptyText="보관된 카드가 없습니다"
+        items={archivedMemos}
+        onClose={() => setArchiveOpen(false)}
+        onUnarchive={(memo) => setMemoArchived(memo.id, false)}
+        onDelete={(memo) => deleteMemo(memo.id)}
+        renderItem={(memo) => (
+          <>
+            <Text style={styles.archiveItemTitle} numberOfLines={2}>
+              {memoSummaryText(memo) || '(내용 없음)'}
+            </Text>
+            <Text style={styles.memoDate}>{formatDate(memo.createdAt)}</Text>
+          </>
+        )}
       />
     </View>
     </ResponsiveScreenContainer>
@@ -817,6 +866,11 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: colors.text,
     lineHeight: 21,
+  },
+  archiveItemTitle: {
+    fontSize: 15,
+    color: colors.text,
+    marginBottom: 4,
   },
   cardTagRow: {
     flexDirection: 'row',

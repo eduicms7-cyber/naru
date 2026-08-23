@@ -30,6 +30,7 @@ function rowToTodo(row: any): Todo {
     tags: row.tags ?? undefined,
     isPinned: row.is_pinned ?? undefined,
     dueDate: row.due_date ?? undefined,
+    isArchived: row.is_archived ?? undefined,
     detailText: row.detail_text ?? undefined,
     detailImageUris: row.detail_image_uris ?? undefined,
     detailNoteType: row.detail_note_type ?? undefined,
@@ -48,6 +49,7 @@ function todoToRow(item: Todo, userId: string) {
     tags: item.tags ?? [],
     is_pinned: item.isPinned ?? false,
     due_date: item.dueDate ?? null,
+    is_archived: item.isArchived ?? false,
     detail_text: item.detailText ?? null,
     detail_image_uris: item.detailImageUris ?? [],
     detail_note_type: item.detailNoteType ?? 'text',
@@ -79,6 +81,7 @@ function rowToMemo(row: any): Memo {
     color: row.color ?? undefined,
     noteType: row.note_type ?? 'text',
     checklistItems: row.checklist_items ?? undefined,
+    isArchived: row.is_archived ?? undefined,
   };
 }
 
@@ -100,6 +103,7 @@ function memoToRow(item: Memo, userId: string) {
     color: item.color ?? null,
     note_type: item.noteType ?? 'text',
     checklist_items: item.checklistItems ?? [],
+    is_archived: item.isArchived ?? false,
   };
 }
 

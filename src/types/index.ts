@@ -14,6 +14,8 @@ export interface Todo {
   isPinned?: boolean;
   // 기한 (선택), YYYY-MM-DD. 목록 정렬 시 고정 다음으로, 기한이 빠른 항목이 먼저 온다.
   dueDate?: string;
+  // 완료된 오래된 할일을 메인 목록에서 치워두는 보관 상태. 보관함 화면에서만 조회/해제/삭제 가능.
+  isArchived?: boolean;
   // 지식창고 글쓰기 UI를 그대로 재사용하는 할일 상세 내용. 지식창고(memos)에는 절대
   // 나타나지 않고 이 할일에만 붙어 있음 — MemoryPalaceScreen/spacedRepetition 대상이 아님.
   detailText?: string;
@@ -40,6 +42,8 @@ export interface Memo {
   color?: string;
   noteType?: 'text' | 'checklist';
   checklistItems?: ChecklistItem[];
+  // 메인 목록/기억의 궁전(복습 대상)에서 완전히 제외하고 보관함 화면에서만 조회/해제/삭제 가능.
+  isArchived?: boolean;
 }
 
 export interface ScheduleEvent {

@@ -21,6 +21,32 @@ function makeId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 }
 
+// 다른 브라우저 탭/창의 <img>를 드래그해 놓으면 dataTransfer.files는 비어 있고 대신
+// text/uri-list(이미지 URL 한 줄) 또는 text/html(<img ... src="...">) 형태로만 정보가 온다.
+// 우선순위: uri-list → html(<img> src 추출) → plain text(그 자체가 URL인 경우).
+function extractImageUrlFromDataTransfer(dataTransfer: DataTransfer | null): string | null {
+  if (!dataTransfer) return null;
+
+  const uriList = dataTransfer.getData('text/uri-list');
+  if (uriList) {
+    const firstUri = uriList.split('\n').map((line) => line.trim()).find((line) => line && !line.startsWith('#'));
+    if (firstUri) return firstUri;
+  }
+
+  const html = dataTransfer.getData('text/html');
+  if (html) {
+    const match = html.match(/<img[^>]+src=["']([^"']+)["']/i);
+    if (match) return match[1];
+  }
+
+  const plain = dataTransfer.getData('text/plain');
+  if (plain && /^https?:\/\//.test(plain.trim())) {
+    return plain.trim();
+  }
+
+  return null;
+}
+
 // 표(엑셀/구글시트/노션 등)를 복사하면 클립보드에 plain text와 함께 HTML 표(<table><tr><td>)도
 // 담기는데, 소스 앱에 따라 plain text의 셀 구분자가 탭이 아니라 개행인 경우가 있어 셀 단위로
 // 항목이 쪼개지는 문제가 있었다. HTML을 직접 파싱해 "한 행 = 한 줄"로 셀을 이어 붙인다.
@@ -115,12 +141,38 @@ export default function NoteContentEditor({
     const handleDrop = (e: DragEvent) => {
       e.preventDefault();
       setDragActive(false);
+      void handleDropAsync(e);
+    };
+    // 로컬 파일 탐색기에서 드래그하면 dataTransfer.files가 채워지지만, 다른 브라우저
+    // 탭/창에 떠 있는 <img>를 드래그하면 브라우저가 files 대신 text/uri-list(이미지 URL)나
+    // text/html(<img> 태그 조각) 문자열로만 정보를 전달한다. 이 경우 URL을 추출해 fetch로
+    // 받아온 뒤 blob: URL로 변환해야 기존 파일 드롭과 동일한 경로(ensureUploadedImage)를 탈 수 있다.
+    const handleDropAsync = async (e: DragEvent) => {
       const files = Array.from(e.dataTransfer?.files ?? []).filter((file) =>
         file.type.startsWith('image/')
       );
-      if (files.length === 0) return;
-      const uris = files.map((file) => URL.createObjectURL(file));
-      onImageUrisChange([...imageUris, ...uris]);
+      if (files.length > 0) {
+        const uris = files.map((file) => URL.createObjectURL(file));
+        onImageUrisChange([...imageUris, ...uris]);
+        return;
+      }
+
+      const imageUrl = extractImageUrlFromDataTransfer(e.dataTransfer);
+      if (!imageUrl) return;
+
+      try {
+        const response = await fetch(imageUrl);
+        if (!response.ok) throw new Error(`fetch failed: ${response.status}`);
+        const blob = await response.blob();
+        const uri = URL.createObjectURL(blob);
+        onImageUrisChange([...imageUris, uri]);
+      } catch (e) {
+        console.warn('드래그한 이미지를 가져오지 못했습니다:', e);
+        showAlert(
+          '이미지를 가져올 수 없어요',
+          '다른 사이트/탭의 이미지는 보안 정책(CORS)에 따라 가져오지 못할 수 있습니다. 이미지를 저장한 뒤 파일로 첨부해주세요.'
+        );
+      }
     };
     node.addEventListener('dragover', handleDragOver);
     node.addEventListener('dragleave', handleDragLeave);

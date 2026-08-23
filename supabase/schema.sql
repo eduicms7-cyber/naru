@@ -11,6 +11,7 @@ create table if not exists todos (
   tags text[] not null default '{}',
   is_pinned boolean not null default false,
   due_date text,
+  is_archived boolean not null default false,
   detail_text text,
   detail_image_uris text[] not null default '{}',
   detail_note_type text not null default 'text',
@@ -32,7 +33,8 @@ create table if not exists memos (
   tags text[] not null default '{}',
   color text,
   note_type text not null default 'text',
-  checklist_items jsonb not null default '[]'
+  checklist_items jsonb not null default '[]',
+  is_archived boolean not null default false
 );
 
 -- 기존에 이미 schema.sql을 실행해 memos 테이블이 있는 프로젝트는 아래 마이그레이션을
@@ -53,6 +55,10 @@ create table if not exists memos (
 -- alter table todos add column if not exists detail_image_uris text[] not null default '{}';
 -- alter table todos add column if not exists detail_note_type text not null default 'text';
 -- alter table todos add column if not exists detail_checklist_items jsonb not null default '[]';
+
+-- 보관함 기능(완료된 할일/지식창고 카드를 메인 목록·기억의 궁전에서 숨김) 추가:
+-- alter table todos add column if not exists is_archived boolean not null default false;
+-- alter table memos add column if not exists is_archived boolean not null default false;
 
 -- 카드 하나당 이미지 여러 장 첨부 기능: 기존 memos 테이블에 image_uris 배열 컬럼을 추가하고,
 -- 이미 있던 단일 이미지(image_uri) 값을 배열의 첫 원소로 옮긴다. image_uri 컬럼은 당분간

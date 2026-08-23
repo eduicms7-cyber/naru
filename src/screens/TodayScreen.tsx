@@ -24,6 +24,7 @@ import { getPendingTodoCompletions } from '../native/ReviewWidget';
 import MemoBody from '../components/MemoBody';
 import MemoImage from '../components/MemoImage';
 import NoteContentEditor from '../components/NoteContentEditor';
+import ArchiveListModal from '../components/ArchiveListModal';
 import ResponsiveScreenContainer from '../components/ResponsiveScreenContainer';
 import { useIsWideLayout } from '../utils/layout';
 import type { TabParamList } from '../navigation/TabNavigator';
@@ -87,6 +88,7 @@ export default function TodayScreen() {
   const [detailImageUris, setDetailImageUris] = useState<string[]>([]);
   const [detailNoteType, setDetailNoteType] = useState<'text' | 'checklist'>('text');
   const [detailChecklistItems, setDetailChecklistItems] = useState<ChecklistItem[]>([]);
+  const [archiveOpen, setArchiveOpen] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -262,14 +264,26 @@ export default function TodayScreen() {
     deleteItem(STORAGE_KEYS.TODOS, id);
   };
 
+  const setArchived = (id: string, isArchived: boolean) => {
+    const updated = todos.map((t) => (t.id === id ? { ...t, isArchived } : t));
+    setTodos(updated);
+    const changed = updated.find((t) => t.id === id);
+    if (changed) updateItem(STORAGE_KEYS.TODOS, changed);
+  };
+
+  const archivedTodos = useMemo(() => todos.filter((t) => t.isArchived), [todos]);
+  const activeTodos = useMemo(() => todos.filter((t) => !t.isArchived), [todos]);
+
   const allTags = useMemo(() => {
     const set = new Set<string>();
-    todos.forEach((t) => t.tags?.forEach((tag) => set.add(tag)));
+    activeTodos.forEach((t) => t.tags?.forEach((tag) => set.add(tag)));
     return Array.from(set);
-  }, [todos]);
+  }, [activeTodos]);
 
   const visibleTodos = useMemo(() => {
-    const filtered = selectedTag ? todos.filter((t) => t.tags?.includes(selectedTag)) : todos;
+    const filtered = selectedTag
+      ? activeTodos.filter((t) => t.tags?.includes(selectedTag))
+      : activeTodos;
     // 별표(고정) 항목이 공지처럼 무조건 맨 위, 그 다음 미완료 → 완료 순.
     // 미완료 항목 안에서는 기한이 빠른 순 → 기한 없음(작성일 내림차순) 순으로,
     // 완료 항목은 완료일 내림차순으로 정렬.
@@ -286,11 +300,11 @@ export default function TodayScreen() {
       }
       return (b.completedAt ?? 0) - (a.completedAt ?? 0);
     });
-  }, [todos, selectedTag]);
+  }, [activeTodos, selectedTag]);
 
   if (!loaded) return <View style={styles.container} />;
 
-  const doneCount = todos.filter((t) => t.done).length;
+  const doneCount = activeTodos.filter((t) => t.done).length;
   const todayKey = toDateKey(new Date());
 
   return (
@@ -304,28 +318,36 @@ export default function TodayScreen() {
           <Text style={styles.dateLabel}>
             {formatTodayLabel()} · v{APP_VERSION}
           </Text>
-          {!IS_LOCAL_MODE && !isWide && (
-            <View style={styles.headerActions}>
+          <View style={styles.headerActions}>
+            <Pressable
+              onPress={() => setArchiveOpen(true)}
+              hitSlop={8}
+              style={styles.headerActionButton}
+            >
+              <Ionicons name="archive-outline" size={20} color={colors.subtext} />
+              <Text style={styles.headerActionLabel}>보관함</Text>
+            </Pressable>
+            {!IS_LOCAL_MODE && !isWide && (
               <Pressable onPress={signOut} hitSlop={8} style={styles.headerActionButton}>
                 <Ionicons name="log-out-outline" size={20} color={colors.subtext} />
                 <Text style={styles.headerActionLabel}>로그아웃</Text>
               </Pressable>
-            </View>
-          )}
+            )}
+          </View>
         </View>
         <Text style={styles.title}>오늘 할 일</Text>
-        {allTags.length === 0 && todos.length > 0 && (
+        {allTags.length === 0 && activeTodos.length > 0 && (
           <Text style={styles.progress}>
-            {doneCount} / {todos.length} 완료
+            {doneCount} / {activeTodos.length} 완료
           </Text>
         )}
       </View>
 
       {allTags.length > 0 && (
         <View style={styles.filterRow}>
-          {todos.length > 0 && (
+          {activeTodos.length > 0 && (
             <Text style={styles.progressInline}>
-              {doneCount}/{todos.length}
+              {doneCount}/{activeTodos.length}
             </Text>
           )}
           <ScrollView
@@ -429,6 +451,11 @@ export default function TodayScreen() {
                   <Pressable onPress={() => openEditForm(item)} hitSlop={8}>
                     <Ionicons name="pencil-outline" size={20} color={colors.subtext} />
                   </Pressable>
+                  {item.done && (
+                    <Pressable onPress={() => setArchived(item.id, true)} hitSlop={8}>
+                      <Ionicons name="archive-outline" size={20} color={colors.subtext} />
+                    </Pressable>
+                  )}
                   <Pressable onPress={() => deleteTodo(item.id)} hitSlop={8}>
                     <Ionicons name="trash-outline" size={20} color={colors.subtext} />
                   </Pressable>
@@ -623,6 +650,25 @@ export default function TodayScreen() {
           </ScrollView>
         </KeyboardAvoidingView>
       </Modal>
+
+      <ArchiveListModal
+        visible={archiveOpen}
+        title="보관함"
+        emptyText="보관된 할 일이 없습니다"
+        items={archivedTodos}
+        onClose={() => setArchiveOpen(false)}
+        onUnarchive={(todo) => setArchived(todo.id, false)}
+        onDelete={(todo) => deleteTodo(todo.id)}
+        renderItem={(todo) => (
+          <>
+            <Text style={styles.archiveItemTitle}>{todo.title}</Text>
+            <Text style={styles.todoMeta}>
+              작성 {formatShortDate(todo.createdAt)}
+              {todo.completedAt ? ` · 완료 ${formatShortDate(todo.completedAt)}` : ''}
+            </Text>
+          </>
+        )}
+      />
     </KeyboardAvoidingView>
     </ResponsiveScreenContainer>
   );
@@ -764,6 +810,10 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.subtext,
     marginTop: 4,
+  },
+  archiveItemTitle: {
+    fontSize: 15,
+    color: colors.text,
   },
   todoTagRow: {
     flexDirection: 'row',
