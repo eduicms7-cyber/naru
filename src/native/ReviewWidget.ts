@@ -1,4 +1,6 @@
 import { NativeModules, Platform } from 'react-native';
+import { Memo } from '../types';
+import { memoSummaryText } from '../utils/richText';
 
 interface ReviewWidgetNativeModule {
   showReview(title: string, body: string): void;
@@ -39,6 +41,24 @@ export function setDueMemos(
 ): void {
   if (Platform.OS === 'android' && nativeModule) {
     nativeModule.setDueMemos(JSON.stringify(memos));
+  }
+}
+
+// 오늘 복습할 카드 목록을 잠금화면 슬라이드/알림에 반영한다. 지식창고와 라이트너 박스 탭이
+// 둘 다 복습 일정을 바꾸므로, 어느 쪽에서 바꿔도 잠금화면이 바로 따라오도록 공용으로 둔다.
+export function syncDueMemosToNative(dueMemos: Memo[]): void {
+  setDueMemos(
+    dueMemos.map((m) => ({
+      id: m.id,
+      text: memoSummaryText(m),
+      color: m.color,
+      imageUris: m.imageUris,
+    }))
+  );
+  if (dueMemos.length === 0) {
+    clearReview();
+  } else {
+    showReview(`오늘 복습할 카드 (${dueMemos.length})`, memoSummaryText(dueMemos[0]));
   }
 }
 

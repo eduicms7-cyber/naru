@@ -1,6 +1,7 @@
 import React from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { StubPencilIcon } from './EditIcons';
 import { colors } from '../theme/colors';
 
 // 사이드바(PC) 즐겨찾기 항목 전용 "⋯" 액션시트. 모바일 즐겨찾기 화면은
@@ -43,7 +44,7 @@ export default function FavoriteRowMenu({
             <Text style={[styles.itemText, !canMoveDown && styles.itemTextDisabled]}>아래로</Text>
           </Pressable>
           <Pressable style={styles.item} onPress={onEdit}>
-            <Ionicons name="pencil-outline" size={18} color={colors.text} />
+            <StubPencilIcon size={18} color={colors.text} />
             <Text style={styles.itemText}>수정</Text>
           </Pressable>
           <Pressable style={styles.item} onPress={onDelete}>

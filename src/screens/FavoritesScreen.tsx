@@ -3,6 +3,7 @@ import { FlatList, KeyboardAvoidingView, Linking, Platform, Pressable, StyleShee
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { StubPencilIcon } from '../components/EditIcons';
 import { Favorite } from '../types';
 import { colors } from '../theme/colors';
 import { useFavorites } from '../hooks/useFavorites';
@@ -103,7 +104,7 @@ export default function FavoritesScreen() {
                 />
               </Pressable>
               <Pressable onPress={() => openEditForm(item)} hitSlop={8}>
-                <Ionicons name="pencil-outline" size={20} color={colors.subtext} />
+                <StubPencilIcon size={20} color={colors.subtext} />
               </Pressable>
               <Pressable onPress={() => remove(item.id)} hitSlop={8}>
                 <Ionicons name="trash-outline" size={20} color={colors.subtext} />

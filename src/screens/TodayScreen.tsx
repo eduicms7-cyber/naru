@@ -14,6 +14,7 @@ import {
 import { NavigationProp, RouteProp, useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { StubPencilIcon } from '../components/EditIcons';
 import { createItem, deleteItem, loadItems, updateItem } from '../storage/storage';
 import { ChecklistItem, STORAGE_KEYS, Todo } from '../types';
 import { colors, todoCardColors, withOpacity } from '../theme/colors';
@@ -57,6 +58,8 @@ function todoCardBackground(todo: Todo, todayKey: string): string {
 const IS_LOCAL_MODE = process.env.EXPO_PUBLIC_STORAGE_MODE === 'local';
 
 const APP_VERSION = appJson.expo.version;
+
+const isWeb = Platform.OS === 'web';
 
 function formatTodayLabel(): string {
   const days = ['일', '월', '화', '수', '목', '금', '토'];
@@ -449,7 +452,7 @@ export default function TodayScreen() {
                     />
                   </Pressable>
                   <Pressable onPress={() => openEditForm(item)} hitSlop={8}>
-                    <Ionicons name="pencil-outline" size={20} color={colors.subtext} />
+                    <StubPencilIcon size={20} color={colors.subtext} />
                   </Pressable>
                   {item.done && (
                     <Pressable onPress={() => setArchived(item.id, true)} hitSlop={8}>
@@ -505,12 +508,18 @@ export default function TodayScreen() {
         <Ionicons name="add" size={28} color="#FFFFFF" />
       </Pressable>
 
-      <Modal visible={formOpen} animationType="slide" transparent onRequestClose={() => setFormOpen(false)}>
+      {/* 앱은 하단 시트, 웹(넓은 화면)은 화면 중앙의 작은 창. */}
+      <Modal
+        visible={formOpen}
+        animationType={isWeb ? 'fade' : 'slide'}
+        transparent
+        onRequestClose={() => setFormOpen(false)}
+      >
         <KeyboardAvoidingView
-          style={styles.formOverlay}
+          style={[styles.formOverlay, isWeb && styles.formOverlayWeb]}
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         >
-          <View style={styles.formCard}>
+          <View style={[styles.formCard, isWeb && styles.formCardWeb]}>
             <View style={styles.formHeader}>
               <Pressable onPress={() => setFormOpen(false)}>
                 <Text style={styles.formCancel}>취소</Text>
@@ -615,14 +624,16 @@ export default function TodayScreen() {
 
       <Modal
         visible={detailEditorOpen}
-        animationType="slide"
+        transparent={isWeb}
+        animationType={isWeb ? 'fade' : 'slide'}
         onRequestClose={() => setDetailEditorOpen(false)}
       >
+        <View style={isWeb ? styles.webDialogBackdrop : styles.detailComposerNativeRoot}>
         <KeyboardAvoidingView
-          style={styles.detailComposer}
+          style={isWeb ? styles.detailComposerWebDialog : styles.detailComposer}
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         >
-          <View style={[styles.detailComposerHeader, { paddingTop: insets.top + 16 }]}>
+          <View style={[styles.detailComposerHeader, { paddingTop: isWeb ? 16 : insets.top + 16 }]}>
             <Pressable onPress={() => setDetailEditorOpen(false)}>
               <Text style={styles.detailComposerCancel}>취소</Text>
             </Pressable>
@@ -632,7 +643,7 @@ export default function TodayScreen() {
             </Pressable>
           </View>
           <ScrollView
-            style={styles.detailComposerScroll}
+            style={isWeb ? styles.webDialogScroll : styles.detailComposerScroll}
             contentContainerStyle={styles.detailComposerScrollContent}
             keyboardShouldPersistTaps="handled"
           >
@@ -649,6 +660,7 @@ export default function TodayScreen() {
             />
           </ScrollView>
         </KeyboardAvoidingView>
+        </View>
       </Modal>
 
       <ArchiveListModal
@@ -887,6 +899,17 @@ const styles = StyleSheet.create({
     paddingBottom: 28,
     gap: 10,
   },
+  formOverlayWeb: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  formCardWeb: {
+    width: '100%',
+    maxWidth: 520,
+    borderRadius: 16,
+    paddingBottom: 20,
+  },
   formHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -999,6 +1022,25 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.card,
   },
+  detailComposerNativeRoot: {
+    flex: 1,
+  },
+  webDialogBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  // detailComposer(flex: 1)와 합치면 웹에서 flex-basis 0%가 height를 무시해 높이가 0이 되므로 따로 둔다.
+  detailComposerWebDialog: {
+    backgroundColor: colors.card,
+    width: '100%',
+    maxWidth: 640,
+    maxHeight: '85%',
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
   detailComposerHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1021,6 +1063,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: colors.primary,
     fontWeight: '600',
+  },
+  // 웹 창은 내용 높이만큼만 커지고(최대 85%) 넘치면 스크롤.
+  webDialogScroll: {
+    flexGrow: 0,
+    flexShrink: 1,
   },
   detailComposerScroll: {
     flex: 1,

@@ -55,12 +55,13 @@ npm run web
 App.tsx                     # 앱 엔트리, NavigationContainer 구성
 src/
   navigation/
-    TabNavigator.tsx         # 하단 탭 4개 (오늘 / 지식창고 / 캘린더 / 즐겨찾기) 구성
+    TabNavigator.tsx         # 하단 탭 5개 (오늘 / 지식창고 / 라이트너 박스 / 캘린더 / 즐겨찾기) 구성 — PC 사이드바(SidebarTabBar)는 즐겨찾기를 빼고 인라인 패널로 보여줌
   screens/
     LoginScreen.tsx            # 이메일/비밀번호 로그인·회원가입
     TodayScreen.tsx           # 오늘 탭: 할일 추가/완료체크/삭제
     KnowledgeVaultScreen.tsx   # 지식창고 탭: 태그·고정·색상이 있는 카드 작성/조회/삭제, 기억의 궁전 실행
     MemoryPalaceScreen.tsx     # 기억의 궁전: 오늘 복습할 카드를 플래시카드 슬라이드로 보여주는 모달(앱 내 실행용)
+    LeitnerBoxScreen.tsx       # 라이트너 박스 탭(포커스마다 memos를 직접 loadItems, 답할 때 updateItem + syncDueMemosToNative로 잠금화면 목록 갱신): Box 1~5 대시보드 + 카드 뒤집기 + 알고 있음/모름 + 섞기. 로직은 src/memory/leitnerBox.ts, reviewStage/nextReviewAt을 기억의 궁전과 공유. 질문/답은 별도 필드 없이 getFlashcard가 본문에서 추출(`---` 구분선 위=질문/아래=답, 없으면 첫 줄=질문). `---`는 MemoBody에서 가로줄로 렌더링
     CalendarScreen.tsx         # 캘린더 탭: 일정 등록/조회 + 할일(작성일, 완료 시 완료일로 이동)·지식창고 카드(작성일)를 날짜별로 함께 보여주고 탭하면 해당 탭으로 이동
     FavoritesScreen.tsx        # 즐겨찾기 탭: 자주 가는 링크(제목+URL) 등록/삭제, 탭하면 브라우저로 열기, 화살표 버튼으로 순서 변경
   auth/

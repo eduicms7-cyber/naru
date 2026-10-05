@@ -14,7 +14,7 @@ import { ICONS, TabParamList } from './tabConfig';
 import { SIDEBAR_WIDTH } from '../utils/layout';
 
 // 사이드바에 직접 내비 버튼으로 노출할 라우트만(즐겨찾기는 사이드바 패널이 완전히 대체).
-const NAV_ROUTE_NAMES: (keyof TabParamList)[] = ['오늘', '지식창고', '캘린더'];
+const NAV_ROUTE_NAMES: (keyof TabParamList)[] = ['오늘', '지식창고', '라이트너', '캘린더'];
 
 const IS_LOCAL_MODE = process.env.EXPO_PUBLIC_STORAGE_MODE === 'local';
 

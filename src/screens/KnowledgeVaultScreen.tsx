@@ -15,19 +15,18 @@ import {
 import { NavigationProp, RouteProp, useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { StubPencilIcon, PushPinIcon } from '../components/EditIcons';
 import { createItem, deleteItem, loadItems, updateItem } from '../storage/storage';
 import { ChecklistItem, Memo, STORAGE_KEYS, Todo } from '../types';
 import { colors, cardColors } from '../theme/colors';
 import { isDueForReview, markRemembered, newMemoReviewFields } from '../memory/spacedRepetition';
 import {
-  clearReview,
   ensureFullScreenIntentPermission,
   getPendingCompletions,
   requestReviewPermission,
-  setDueMemos,
   setTodos,
-  showReview,
   startWakeMonitor,
+  syncDueMemosToNative,
 } from '../native/ReviewWidget';
 import { memoSummaryText } from '../utils/richText';
 import { parseTags } from '../utils/tags';
@@ -68,6 +67,8 @@ const CARD_TAG_ROW_HEIGHT = 27; // cardTagRow marginTop(8) + 칩 높이
 const CARD_IMAGE_BLOCK_HEIGHT = 140; // 접힌 카드의 이미지 maxHeight(130) + marginBottom(10)
 const CARD_TEXT_LINE_HEIGHT = 21; // MemoBody styles.text.lineHeight
 const CARD_MIN_LINES = 2;
+
+const isWeb = Platform.OS === 'web';
 
 function getCollapsedLineCount(item: Memo): number {
   let available = COLLAPSED_CARD_HEIGHT - CARD_VERTICAL_PADDING - CARD_FOOTER_BLOCK_HEIGHT;
@@ -171,18 +172,7 @@ export default function KnowledgeVaultScreen() {
   const incompleteTodos = useMemo(() => todayTodos.filter((t) => !t.done), [todayTodos]);
 
   useEffect(() => {
-    const dueForNative = dueMemos.map((m) => ({
-      id: m.id,
-      text: memoSummaryText(m),
-      color: m.color,
-      imageUris: m.imageUris,
-    }));
-    setDueMemos(dueForNative);
-    if (dueMemos.length === 0) {
-      clearReview();
-    } else {
-      showReview(`오늘 복습할 카드 (${dueMemos.length})`, memoSummaryText(dueMemos[0]));
-    }
+    syncDueMemosToNative(dueMemos);
   }, [dueMemos]);
 
   useEffect(() => {
@@ -490,8 +480,8 @@ export default function KnowledgeVaultScreen() {
                     다음 복습 {formatShortDate(item.nextReviewAt)}
                   </Text>
                   <Pressable onPress={() => toggleDailyPin(item.id)} hitSlop={8}>
-                    <Ionicons
-                      name={item.dailyPin ? 'pin' : 'pin-outline'}
+                    <PushPinIcon
+                      active={item.dailyPin === true}
                       size={18}
                       color={item.dailyPin ? colors.primary : colors.subtext}
                     />
@@ -504,7 +494,7 @@ export default function KnowledgeVaultScreen() {
                     />
                   </Pressable>
                   <Pressable onPress={() => openEditor(item)} hitSlop={8}>
-                    <Ionicons name="pencil-outline" size={18} color={colors.subtext} />
+                    <StubPencilIcon size={18} color={colors.subtext} />
                   </Pressable>
                   <Pressable onPress={() => setMemoArchived(item.id, true)} hitSlop={8}>
                     <Ionicons name="archive-outline" size={18} color={colors.subtext} />
@@ -559,8 +549,8 @@ export default function KnowledgeVaultScreen() {
                     다음 복습 {formatShortDate(viewingMemo.nextReviewAt)}
                   </Text>
                   <Pressable onPress={() => toggleDailyPin(viewingMemo.id)} hitSlop={8}>
-                    <Ionicons
-                      name={viewingMemo.dailyPin ? 'pin' : 'pin-outline'}
+                    <PushPinIcon
+                      active={viewingMemo.dailyPin === true}
                       size={18}
                       color={viewingMemo.dailyPin ? colors.primary : colors.subtext}
                     />
@@ -579,7 +569,7 @@ export default function KnowledgeVaultScreen() {
                     }}
                     hitSlop={8}
                   >
-                    <Ionicons name="pencil-outline" size={18} color={colors.subtext} />
+                    <StubPencilIcon size={18} color={colors.subtext} />
                   </Pressable>
                   <Pressable
                     onPress={() => {
@@ -627,6 +617,30 @@ export default function KnowledgeVaultScreen() {
                 기억을 꺼내는 것과 닮아서 이 이름을 붙였습니다. 핀으로 고정한 카드와 아직 잊지
                 않은 카드까지 매일 반복해서 넘겨보면 더 오래 기억할 수 있어요.
               </Text>
+              <Text style={styles.helpTitle}>라이트너 박스란?</Text>
+              <Text style={styles.helpBody}>
+                메뉴의 '라이트너 박스' 탭에서 지식창고 카드를 Box 1~5 상자에 나눠 담고, 맞히면 다음 상자로 올리고 틀리면 Box 1로 돌려보내는
+                플래시카드 복습법입니다. 상자가 높을수록 드물게 다시 나와요 — Box 1은 매일, Box 2는
+                3일, Box 3은 7일, Box 4는 14일, Box 5는 30일 뒤. 카드 앞면(질문)을 보고 답을 떠올린
+                뒤 뒤집어서 [알고 있음] 또는 [모름]을 누르세요. 기억의 궁전과 같은 복습 일정을
+                공유하므로 어느 쪽에서 복습해도 함께 반영됩니다.
+              </Text>
+              <Text style={styles.helpTitle}>질문/답 카드 만드는 법</Text>
+              <Text style={styles.helpBody}>
+                카드 본문에 하이픈 세 개(---)만 있는 줄을 넣으면, 그 위는 질문, 아래는 답이 됩니다.
+                글쓰기 창 서식 버튼 줄의 [---] 버튼을 누르면 구분선과 줄바꿈이 한 번에 들어가요.
+              </Text>
+              <View style={styles.helpExample}>
+                <Text style={styles.helpExampleText}>{'사과는 영어로?\n---\napple'}</Text>
+              </View>
+              <Text style={styles.helpBody}>
+                구분선은 지식창고와 기억의 궁전에서는 가로줄로 보여요. 구분선이 없는 카드는 이렇게
+                정해집니다.{'\n'}
+                · 여러 줄 카드: 첫 줄이 질문, 뒤집으면 카드 전체{'\n'}
+                · 한 줄 카드: 뒤집지 않고 바로 알고 있음/모름{'\n'}
+                · 체크리스트: 제목(없으면 첫 항목)이 질문{'\n'}
+                · 이미지만 있는 카드: 태그가 힌트로 나오고, 뒤집으면 이미지
+              </Text>
             </ScrollView>
             <Pressable style={styles.viewerCloseButton} onPress={() => setHelpOpen(false)}>
               <Text style={styles.viewerCloseText}>닫기</Text>
@@ -635,12 +649,19 @@ export default function KnowledgeVaultScreen() {
         </View>
       </Modal>
 
-      <Modal visible={composerOpen} animationType="slide" onRequestClose={() => setComposerOpen(false)}>
+      {/* 웹(넓은 화면)에서는 전체화면 대신 카드 뷰어처럼 어두운 배경 위 중앙 창으로 띄운다. */}
+      <Modal
+        visible={composerOpen}
+        transparent={isWeb}
+        animationType={isWeb ? 'fade' : 'slide'}
+        onRequestClose={() => setComposerOpen(false)}
+      >
+        <View style={isWeb ? styles.viewerBackdrop : styles.composerNativeRoot}>
         <KeyboardAvoidingView
-          style={styles.composer}
+          style={isWeb ? styles.composerWebDialog : styles.composer}
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         >
-          <View style={styles.composerHeader}>
+          <View style={[styles.composerHeader, isWeb && styles.composerHeaderWeb]}>
             <Pressable onPress={() => setComposerOpen(false)}>
               <Text style={styles.composerCancel}>취소</Text>
             </Pressable>
@@ -651,7 +672,7 @@ export default function KnowledgeVaultScreen() {
           </View>
 
           <ScrollView
-            style={styles.composerScroll}
+            style={isWeb ? styles.webDialogScroll : styles.composerScroll}
             contentContainerStyle={styles.composerScrollContent}
             keyboardShouldPersistTaps="handled"
           >
@@ -702,6 +723,7 @@ export default function KnowledgeVaultScreen() {
             )}
           </ScrollView>
         </KeyboardAvoidingView>
+        </View>
       </Modal>
 
       <MemoryPalaceScreen
@@ -769,6 +791,22 @@ const styles = StyleSheet.create({
     lineHeight: 21,
     color: colors.subtext,
     marginBottom: 20,
+  },
+  helpExample: {
+    backgroundColor: colors.background,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    marginTop: -10,
+    marginBottom: 14,
+  },
+  helpExampleText: {
+    fontSize: 14,
+    lineHeight: 21,
+    color: colors.text,
+    fontFamily: Platform.OS === 'web' ? 'monospace' : undefined,
   },
   palaceButton: {
     flexDirection: 'row',
@@ -965,6 +1003,21 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.card,
   },
+  composerNativeRoot: {
+    flex: 1,
+  },
+  // composer(flex: 1)와 합치면 웹에서 flex-basis 0%가 height를 무시해 높이가 0이 되므로 따로 둔다.
+  composerWebDialog: {
+    backgroundColor: colors.card,
+    width: '100%',
+    maxWidth: 640,
+    maxHeight: '85%',
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  composerHeaderWeb: {
+    paddingTop: 16,
+  },
   composerHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -988,6 +1041,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: colors.primary,
     fontWeight: '600',
+  },
+  // 웹 창은 내용 높이만큼만 커지고(최대 85%) 넘치면 스크롤.
+  webDialogScroll: {
+    flexGrow: 0,
+    flexShrink: 1,
   },
   composerScroll: {
     flex: 1,

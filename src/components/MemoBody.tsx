@@ -100,20 +100,24 @@ export default function MemoBody({ memo, onToggleItem, textStyle, numberOfLines 
   const blocks = parseBlocks(memo.text);
   return (
     <View>
-      {blocks.map((block, i) => (
-        <Text
-          key={i}
-          style={[
-            styles.text,
-            textStyle,
-            block.level === 1 && styles.h1,
-            block.level === 2 && styles.h2,
-            block.level === 3 && styles.h3,
-          ]}
-        >
-          <FormattedText segments={block.segments} />
-        </Text>
-      ))}
+      {blocks.map((block, i) =>
+        block.divider ? (
+          <View key={i} style={styles.divider} />
+        ) : (
+          <Text
+            key={i}
+            style={[
+              styles.text,
+              textStyle,
+              block.level === 1 && styles.h1,
+              block.level === 2 && styles.h2,
+              block.level === 3 && styles.h3,
+            ]}
+          >
+            <FormattedText segments={block.segments} />
+          </Text>
+        )
+      )}
     </View>
   );
 }
@@ -145,6 +149,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginTop: 4,
     marginBottom: 2,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: colors.border,
+    marginVertical: 10,
   },
   bold: {
     fontWeight: '700',

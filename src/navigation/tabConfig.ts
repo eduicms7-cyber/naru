@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 export type TabParamList = {
   오늘: { focusTodoId?: string } | undefined;
   지식창고: { focusMemoId?: string } | undefined;
+  라이트너: undefined;
   캘린더: undefined;
   즐겨찾기: undefined;
 };
@@ -12,6 +13,7 @@ export type TabParamList = {
 export const ICONS: Record<keyof TabParamList, keyof typeof Ionicons.glyphMap> = {
   오늘: 'today-outline',
   지식창고: 'library-outline',
+  라이트너: 'file-tray-stacked-outline',
   캘린더: 'calendar-outline',
   즐겨찾기: 'star-outline',
 };

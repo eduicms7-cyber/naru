@@ -224,6 +224,30 @@ export default function NoteContentEditor({
     setTextSelection({ start: cursor, end: cursor });
   };
 
+  // 라이트너 박스용 질문/답 구분선. 커서 위치에 `---` 한 줄을 넣고 줄을 바꾼다 —
+  // 커서가 줄 중간이면 먼저 줄을 바꿔서 구분선이 항상 독립된 줄이 되게 한다.
+  const insertQuestionDivider = () => {
+    const { start, end } = textSelection;
+    const before = text.slice(0, start);
+    const after = text.slice(end);
+    const inserted = `${before.length === 0 || before.endsWith('\n') ? '' : '\n'}---\n`;
+    onTextChange(before + inserted + after);
+    const cursor = before.length + inserted.length;
+    setTextSelection({ start: cursor, end: cursor });
+    // 버튼을 누르면 입력창 포커스가 빠지므로, 다시 포커스를 주고 커서를 구분선 다음 줄(답 쓸 자리)로
+    // 옮긴다. 웹은 DOM textarea의 setSelectionRange, 앱은 TextInput.setSelection.
+    setTimeout(() => {
+      const node = inputRef.current as unknown as {
+        focus?: () => void;
+        setSelectionRange?: (s: number, e: number) => void;
+        setSelection?: (s: number, e: number) => void;
+      } | null;
+      node?.focus?.();
+      if (node?.setSelectionRange) node.setSelectionRange(cursor, cursor);
+      else node?.setSelection?.(cursor, cursor);
+    }, 0);
+  };
+
   // 커서가 있는 줄 맨 앞에 # / ## / ### 을 붙이거나(이미 같은 레벨이면) 뗀다.
   const setHeadingLevel = (level: 1 | 2 | 3) => {
     const cursor = textSelection.start;
@@ -391,6 +415,14 @@ export default function NoteContentEditor({
           </Pressable>
           <Pressable style={styles.formatButton} onPress={() => wrapSelection('~~')}>
             <Text style={[styles.formatButtonText, styles.formatStrike]}>S</Text>
+          </Pressable>
+          <View style={styles.formatToolbarDivider} />
+          <Pressable
+            style={styles.formatButton}
+            onPress={insertQuestionDivider}
+            accessibilityLabel="질문/답 구분선 넣기"
+          >
+            <Text style={styles.formatButtonText}>---</Text>
           </Pressable>
         </View>
       )}

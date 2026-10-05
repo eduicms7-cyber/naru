@@ -64,9 +64,30 @@ export function parseInlineFormatting(input: string): FormattedSegment[] {
   return segments.length > 0 ? segments : [{ text: input }];
 }
 
+// 본문에 `---`(하이픈 3개 이상)만 있는 줄은 구분선. 라이트너 박스에서는 그 위를 질문,
+// 아래를 답으로 쓰고, 다른 화면에서는 가로줄로 그린다.
+const DIVIDER_LINE_PATTERN = /^\s*-{3,}\s*$/;
+const DIVIDER_LINES_PATTERN = /^\s*-{3,}\s*$/gm;
+
+export function isDividerLine(line: string): boolean {
+  return DIVIDER_LINE_PATTERN.test(line);
+}
+
+// 첫 번째 구분선 기준으로 질문/답을 나눈다. 구분선이 없으면 null.
+export function splitQuestionAnswer(input: string): { question: string; answer: string } | null {
+  const lines = input.split('\n');
+  const index = lines.findIndex(isDividerLine);
+  if (index < 0) return null;
+  return {
+    question: lines.slice(0, index).join('\n').trim(),
+    answer: lines.slice(index + 1).join('\n').trim(),
+  };
+}
+
 // 알림/잠금화면처럼 서식 마크업을 해석하지 못하는 곳에 넘길 평문.
 export function stripFormatting(input: string): string {
   return input
+    .replace(DIVIDER_LINES_PATTERN, '')
     .replace(/^#{1,3}\s+/gm, '')
     .replace(/\*\*(.+?)\*\*/g, '$1')
     .replace(/~~(.+?)~~/g, '$1')
@@ -80,6 +101,7 @@ export function checklistSummary(items: ChecklistItem[]): string {
 export interface TextBlock {
   level: 0 | 1 | 2 | 3;
   segments: FormattedSegment[];
+  divider?: boolean;
 }
 
 const HEADING_PATTERN = /^(#{1,3})\s+(.*)$/;
@@ -87,6 +109,7 @@ const HEADING_PATTERN = /^(#{1,3})\s+(.*)$/;
 // 줄 단위로 # / ## / ### 제목 표시를 인식해 블록으로 나눈다. 전체(펼침) 표시용.
 export function parseBlocks(input: string): TextBlock[] {
   return input.split('\n').map((line) => {
+    if (isDividerLine(line)) return { level: 0 as const, segments: [], divider: true };
     const match = line.match(HEADING_PATTERN);
     if (match) {
       return { level: match[1].length as 1 | 2 | 3, segments: parseInlineFormatting(match[2]) };
@@ -97,7 +120,7 @@ export function parseBlocks(input: string): TextBlock[] {
 
 // 목록 미리보기처럼 한 줄로 눌러 담을 때 쓰는, 제목 기호만 제거한 평문.
 export function stripHeadingMarkers(input: string): string {
-  return input.replace(/^#{1,3}\s+/gm, '');
+  return input.replace(/^#{1,3}\s+/gm, '').replace(DIVIDER_LINES_PATTERN, '');
 }
 
 // 알림/잠금화면/캘린더처럼 카드를 한 줄로 요약해야 하는 곳에서 공용으로 쓰는 요약 텍스트.

@@ -3,6 +3,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import TodayScreen from '../screens/TodayScreen';
 import KnowledgeVaultScreen from '../screens/KnowledgeVaultScreen';
+import LeitnerBoxScreen from '../screens/LeitnerBoxScreen';
 import CalendarScreen from '../screens/CalendarScreen';
 import FavoritesScreen from '../screens/FavoritesScreen';
 import { colors } from '../theme/colors';
@@ -36,6 +37,7 @@ export default function TabNavigator() {
     >
       <Tab.Screen name="오늘" component={TodayScreen} options={{ tabBarLabel: '할 일' }} />
       <Tab.Screen name="지식창고" component={KnowledgeVaultScreen} />
+      <Tab.Screen name="라이트너" component={LeitnerBoxScreen} options={{ tabBarLabel: '라이트너 박스' }} />
       <Tab.Screen name="캘린더" component={CalendarScreen} />
       <Tab.Screen name="즐겨찾기" component={FavoritesScreen} />
     </Tab.Navigator>
